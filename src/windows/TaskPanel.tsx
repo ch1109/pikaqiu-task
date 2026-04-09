@@ -10,6 +10,7 @@ import { useTaskStore } from "@/stores/useTaskStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { scheduleDay } from "@/services/scheduler";
 import { analyzeConflicts } from "@/services/conflictDetector";
+import { setupReminders, clearReminders } from "@/services/reminder";
 
 const TABS = [
   { key: "timeline", label: "日程", icon: "⏱" },
@@ -17,8 +18,15 @@ const TABS = [
   { key: "review", label: "复盘", icon: "📊" },
 ];
 
+interface OvertimeAlert {
+  subtaskId: number;
+  subtaskName: string;
+  message: string;
+}
+
 export default function TaskPanel() {
   const [activeTab, setActiveTab] = useState("tasks");
+  const [overtime, setOvertime] = useState<OvertimeAlert | null>(null);
   const { tasks, subtasks, loading, loadToday, startTask, completeTask, startSubtask, completeSubtask, updateSubtaskStatus } = useTaskStore();
   const { settings, load: loadSettings } = useSettingsStore();
 
@@ -33,6 +41,16 @@ export default function TaskPanel() {
     return () => { unlisten.then((fn) => fn()); };
   }, [loadToday]);
 
+  // 监听超时提醒
+  useEffect(() => {
+    const unlisten = listen<OvertimeAlert>("reminder", (event) => {
+      if (event.payload.message.includes("超时")) {
+        setOvertime(event.payload);
+      }
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
   // 计算排程
   const schedule = useMemo(() => {
     if (tasks.length === 0 || !settings) return { blocks: [], conflicts: [] };
@@ -45,6 +63,14 @@ export default function TaskPanel() {
       breakMins: settings.break_mins,
     });
   }, [tasks, subtasks, settings]);
+
+  // 设置提醒定时器
+  useEffect(() => {
+    if (schedule.blocks.length > 0) {
+      setupReminders(schedule.blocks);
+    }
+    return () => clearReminders();
+  }, [schedule.blocks]);
 
   const conflictSuggestions = useMemo(
     () => analyzeConflicts(schedule.conflicts),
@@ -227,8 +253,83 @@ export default function TaskPanel() {
           </div>
         )}
       </div>
+
+      {/* 超时弹窗 */}
+      {overtime && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(8, 10, 24, 0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+        >
+          <div
+            className="animate-panel-enter"
+            style={{
+              background: "var(--bg-panel)",
+              border: "1px solid rgba(255, 184, 0, 0.3)",
+              borderRadius: "var(--radius-lg)",
+              padding: "20px 24px",
+              maxWidth: 320,
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: 24, marginBottom: 8 }}>⏰</div>
+            <div style={{ fontSize: 13, color: "var(--text-primary)", marginBottom: 4 }}>
+              {overtime.subtaskName}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--amber-glow)", marginBottom: 16 }}>
+              已超过预估时间的 150%
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button
+                onClick={() => setOvertime(null)}
+                style={overtimeBtn("var(--cyan-glow)", "rgba(0, 240, 255, 0.12)")}
+              >
+                继续
+              </button>
+              <button
+                onClick={async () => {
+                  await handleCompleteSubtask(overtime.subtaskId);
+                  setOvertime(null);
+                }}
+                style={overtimeBtn("var(--neon-green)", "rgba(57, 255, 20, 0.12)")}
+              >
+                完成
+              </button>
+              <button
+                onClick={async () => {
+                  await handleSkipSubtask(overtime.subtaskId);
+                  setOvertime(null);
+                }}
+                style={overtimeBtn("var(--text-muted)", "rgba(74, 80, 104, 0.15)")}
+              >
+                跳过
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function overtimeBtn(color: string, bg: string): React.CSSProperties {
+  return {
+    padding: "6px 16px",
+    border: "none",
+    borderRadius: "var(--radius-sm)",
+    background: bg,
+    color,
+    fontSize: 12,
+    fontFamily: "var(--font-body)",
+    cursor: "pointer",
+    transition: "var(--transition-fast)",
+  };
 }
 
 function StatBox({ label, value, color }: { label: string; value: string; color: string }) {
