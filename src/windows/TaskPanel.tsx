@@ -5,7 +5,7 @@ import TabBar from "@/components/shared/TabBar";
 import TaskList from "@/components/task/TaskList";
 import TaskTimeline from "@/components/task/TaskTimeline";
 import ConflictAlert from "@/components/task/ConflictAlert";
-import ProgressRing from "@/components/shared/ProgressRing";
+import DailyReview from "@/components/review/DailyReview";
 import { useTaskStore } from "@/stores/useTaskStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { scheduleDay } from "@/services/scheduler";
@@ -27,7 +27,7 @@ interface OvertimeAlert {
 export default function TaskPanel() {
   const [activeTab, setActiveTab] = useState("tasks");
   const [overtime, setOvertime] = useState<OvertimeAlert | null>(null);
-  const { tasks, subtasks, loading, loadToday, startTask, completeTask, startSubtask, completeSubtask, updateSubtaskStatus } = useTaskStore();
+  const { currentPlan, tasks, subtasks, loading, loadToday, startTask, completeTask, startSubtask, completeSubtask, updateSubtaskStatus } = useTaskStore();
   const { settings, load: loadSettings } = useSettingsStore();
 
   useEffect(() => {
@@ -76,17 +76,6 @@ export default function TaskPanel() {
     () => analyzeConflicts(schedule.conflicts),
     [schedule.conflicts]
   );
-
-  // 复盘统计
-  const stats = useMemo(() => {
-    const total = tasks.length;
-    const completed = tasks.filter((t) => t.status === "completed").length;
-    const skipped = tasks.filter((t) => t.status === "skipped").length;
-    const totalEstimated = tasks.reduce((s, t) => s + t.estimated_mins, 0);
-    const totalActual = tasks.reduce((s, t) => s + (t.actual_mins || 0), 0);
-    const percent = total > 0 ? (completed / total) * 100 : 0;
-    return { total, completed, skipped, totalEstimated, totalActual, percent };
-  }, [tasks]);
 
   const handleStartTask = useCallback(async (id: number) => { await startTask(id); }, [startTask]);
   const handleCompleteTask = useCallback(async (id: number) => { await completeTask(id); }, [completeTask]);
@@ -202,55 +191,7 @@ export default function TaskPanel() {
         )}
 
         {!loading && activeTab === "review" && (
-          <div
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              padding: 16,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 20,
-            }}
-          >
-            {/* 进度环 */}
-            <ProgressRing
-              percent={stats.percent}
-              size={100}
-              strokeWidth={6}
-              color={stats.percent >= 100 ? "var(--neon-green)" : "var(--cyan-glow)"}
-            />
-
-            {/* 统计卡片 */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 10,
-                width: "100%",
-                maxWidth: 380,
-              }}
-            >
-              <StatBox label="总任务" value={`${stats.total}`} color="var(--cyan-glow)" />
-              <StatBox label="已完成" value={`${stats.completed}`} color="var(--neon-green)" />
-              <StatBox label="已跳过" value={`${stats.skipped}`} color="var(--text-muted)" />
-              <StatBox
-                label="预估/实际"
-                value={`${stats.totalEstimated}m / ${stats.totalActual}m`}
-                color={
-                  stats.totalActual > stats.totalEstimated
-                    ? "var(--amber-glow)"
-                    : "var(--cyan-glow)"
-                }
-              />
-            </div>
-
-            {stats.total === 0 && (
-              <div style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 10 }}>
-                暂无数据 — 完成任务后查看复盘
-              </div>
-            )}
-          </div>
+          <DailyReview planId={currentPlan?.id ?? null} tasks={tasks} />
         )}
       </div>
 
@@ -332,26 +273,3 @@ function overtimeBtn(color: string, bg: string): React.CSSProperties {
   };
 }
 
-function StatBox({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div
-      style={{
-        background: "var(--bg-card)",
-        border: "var(--border-glass)",
-        borderRadius: "var(--radius-sm)",
-        padding: "10px 12px",
-        textAlign: "center",
-      }}
-    >
-      <div
-        className="text-mono"
-        style={{ fontSize: 18, fontWeight: 600, color }}
-      >
-        {value}
-      </div>
-      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
-        {label}
-      </div>
-    </div>
-  );
-}
