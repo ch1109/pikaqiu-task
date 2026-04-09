@@ -1,0 +1,168 @@
+/* ===== Neon Kawaii Terminal 设计系统 ===== */
+
+:root {
+  /* 字体 */
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'Nunito', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* 底色 - 深空背景 */
+  --bg-void: rgba(8, 10, 24, 0.92);
+  --bg-panel: rgba(14, 18, 38, 0.88);
+  --bg-card: rgba(22, 28, 52, 0.85);
+  --bg-hover: rgba(30, 38, 68, 0.9);
+  --bg-input: rgba(10, 12, 28, 0.6);
+
+  /* 主色 - 霓虹青（科技感） */
+  --cyan-glow: #00F0FF;
+  --cyan-dim: #0A8A94;
+  --cyan-bg: rgba(0, 240, 255, 0.08);
+
+  /* 强调色 - 樱花洋红（可爱感） */
+  --magenta-glow: #FF3CAC;
+  --magenta-dim: #A0276E;
+  --magenta-bg: rgba(255, 60, 172, 0.08);
+
+  /* 辅助色 */
+  --lavender: #B4A0FF;
+  --neon-green: #39FF14;
+  --amber-glow: #FFB800;
+  --coral-warn: #FF6B6B;
+
+  /* 文字 */
+  --text-primary: #E8ECF4;
+  --text-secondary: #8890A4;
+  --text-muted: #4A5068;
+
+  /* 发光效果 */
+  --glow-cyan: 0 0 12px rgba(0, 240, 255, 0.4);
+  --glow-magenta: 0 0 12px rgba(255, 60, 172, 0.4);
+  --glow-green: 0 0 10px rgba(57, 255, 20, 0.3);
+  --glow-amber: 0 0 10px rgba(255, 184, 0, 0.3);
+
+  /* 边框 */
+  --border-glass: 1px solid rgba(255, 255, 255, 0.06);
+  --border-glow: 1px solid rgba(0, 240, 255, 0.2);
+  --border-magenta: 1px solid rgba(255, 60, 172, 0.2);
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* 过渡 */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-smooth: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 间距 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+}
+
+/* ===== 全局重置 ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+/* ===== 滚动条定制 ===== */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--cyan-dim);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cyan-glow);
+}
+
+/* ===== 玻璃拟态基础 ===== */
+.glass-panel {
+  background: var(--bg-panel);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: var(--border-glass);
+  border-radius: var(--radius-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 扫描线纹理叠加 */
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 240, 255, 0.015) 2px,
+    rgba(0, 240, 255, 0.015) 4px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glass-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== 排版 ===== */
+.heading-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.text-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: -0.02em;
+}
+
+/* ===== 霓虹辉光交互 ===== */
+.neon-hover-cyan {
+  transition: box-shadow var(--transition-normal), border-color var(--transition-normal);
+}
+
+.neon-hover-cyan:hover {
+  box-shadow: var(--glow-cyan);
+  border-color: rgba(0, 240, 255, 0.35);
+}
+
+.neon-hover-magenta:hover {
+  box-shadow: var(--glow-magenta);
+  border-color: rgba(255, 60, 172, 0.35);
+}
