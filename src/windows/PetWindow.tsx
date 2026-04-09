@@ -1,13 +1,15 @@
 import { useState, useCallback, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import PetSprite from "@/components/pet/PetSprite";
 import PetBubble from "@/components/pet/PetBubble";
 import PetContextMenu from "@/components/pet/PetContextMenu";
 import { usePetStore } from "@/stores/usePetStore";
+import type { PetState } from "@/types/pet";
 
 export default function PetWindow() {
-  const { state, bubbleText, showBubble } = usePetStore();
+  const { state, bubbleText, showBubble, setState } = usePetStore();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const handleDoubleClick = useCallback(async () => {
@@ -23,7 +25,16 @@ export default function PetWindow() {
   useEffect(() => {
     const win = getCurrentWindow();
     win.setAlwaysOnTop(true);
-  }, []);
+
+    // 监听跨窗口桌宠状态变更
+    const unlisten = listen<{ state: PetState }>("pet-state", (event) => {
+      setState(event.payload.state);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [setState]);
 
   return (
     <div
@@ -41,13 +52,10 @@ export default function PetWindow() {
         background: "transparent",
       }}
     >
-      {/* 桌宠角色 */}
       <PetSprite state={state} size={140} />
 
-      {/* 气泡提示 */}
       {bubbleText && <PetBubble text={bubbleText} />}
 
-      {/* 右键菜单 */}
       {menu && (
         <PetContextMenu
           x={menu.x}
