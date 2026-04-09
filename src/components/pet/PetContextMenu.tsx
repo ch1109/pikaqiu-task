@@ -39,9 +39,7 @@ export default function PetContextMenu({ x, y, onClose }: PetContextMenuProps) {
     {
       label: "设置",
       icon: "⚙",
-      action: () => {
-        /* Phase 8 实现 */
-      },
+      action: () => invoke("create_settings_window"),
     },
     {
       label: "退出",

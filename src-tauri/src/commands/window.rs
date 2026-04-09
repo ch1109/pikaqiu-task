@@ -42,3 +42,24 @@ pub async fn create_task_window(app: AppHandle) -> Result<(), String> {
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn create_settings_window(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("settings") {
+        win.show().map_err(|e| e.to_string())?;
+        win.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(&app, "settings", WebviewUrl::App("index.html".into()))
+        .title("CyberPet 设置")
+        .inner_size(420.0, 520.0)
+        .decorations(false)
+        .transparent(true)
+        .resizable(false)
+        .center()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}

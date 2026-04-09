@@ -15,6 +15,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::window::create_chat_window,
             commands::window::create_task_window,
+            commands::window::create_settings_window,
         ])
         .run(tauri::generate_context!())
         .expect("启动 CyberPet 失败");
