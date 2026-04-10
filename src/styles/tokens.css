@@ -1,0 +1,75 @@
+/* ===== WildCard Airy Light Tokens =====
+ * 参考美学：WildCard 官网 · Linear Issues · Airy Light SaaS
+ * 主基调：极浅冷蓝底 #EDF3FB + 纯白卡片 + friendly blue #2E6FEB 强调
+ * 设计原则：蓝 / 白 / 圆，柔和漫射阴影，无印刷感
+ */
+
+:root {
+  /* ===== 纸张层（白 + 极浅冷蓝阶梯）===== */
+  --paper-0:    #FFFFFF;      /* 卡片主体，纯白 */
+  --paper-1:    #EDF3FB;      /* 面板底色（主区极浅冷蓝） */
+  --paper-2:    #E4ECF8;      /* 窗口外层稍深 */
+  --paper-3:    #F4F8FD;      /* hover 淡蓝 */
+  --paper-edge: #C9D6EA;      /* 边界蓝灰 */
+
+  /* ===== 墨色 8 档阶梯（slate 系）===== */
+  --ink-900: #0F172A;         /* slate-900 主标题 */
+  --ink-800: #1E293B;         /* slate-800 正文 */
+  --ink-700: #334155;         /* slate-700 */
+  --ink-600: #475569;         /* slate-600 */
+  --ink-500: #64748B;         /* slate-500 次级标签 */
+  --ink-400: #94A3B8;         /* slate-400 muted */
+  --ink-300: #CBD5E1;         /* slate-300 disabled */
+  --ink-200: #E2E8F0;         /* slate-200 分隔线强 */
+  --ink-100: #EEF2F7;         /* 分隔线弱 */
+  --ink-50:  #F4F8FD;         /* 最浅墨影 */
+
+  /* ===== 主强调（friendly blue）===== */
+  --vermilion-100: rgba(46, 111, 235, 0.06);   /* hover 底 */
+  --vermilion-200: rgba(46, 111, 235, 0.12);   /* focus ring */
+  --vermilion-400: rgba(46, 111, 235, 0.30);   /* 软边框 */
+  --vermilion-600: #2E6FEB;                    /* solid friendly blue */
+  --vermilion-700: #2258C4;                    /* hover solid */
+  --seal-red:      #DC2626;                    /* 语义 danger 红（保留） */
+
+  /* ===== 辅助色（indigo 合并到蓝 / emerald success / amber warn）===== */
+  --indigo-600: #2E6FEB;                       /* 合并到主蓝 */
+  --indigo-200: rgba(46, 111, 235, 0.10);
+  --indigo-100: rgba(46, 111, 235, 0.05);
+  --moss-600:   #10B981;                       /* emerald success */
+  --moss-200:   rgba(16, 185, 129, 0.12);
+  --moss-100:   rgba(16, 185, 129, 0.05);
+  --amber-600:  #F59E0B;                       /* 标准 amber */
+  --amber-200:  rgba(245, 158, 11, 0.14);
+  --amber-100:  rgba(245, 158, 11, 0.06);
+
+  /* ===== 尺线三级 ===== */
+  --rule-line-strong: rgba(15, 23, 42, 0.12);
+  --rule-line:        rgba(15, 23, 42, 0.06);
+  --rule-line-dim:    rgba(15, 23, 42, 0.03);
+
+  /* ===== Page gutter 基线 ===== */
+  --page-gutter: 22px;
+
+  /* ===== 圆角（WildCard 大圆角）===== */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;          /* WildCard 卡片主圆角 */
+  --radius-xl: 24px;
+
+  /* ===== 阴影 —— 柔和漫射，带蓝色调高光 ===== */
+  --shadow-paper-low:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 2px 8px rgba(46, 111, 235, 0.04);
+  --shadow-paper-mid:
+    0 4px 16px rgba(46, 111, 235, 0.06),
+    0 8px 32px rgba(15, 23, 42, 0.06);
+  --shadow-paper-lift:
+    0 12px 32px rgba(46, 111, 235, 0.10),
+    0 24px 64px rgba(15, 23, 42, 0.08);
+
+  /* hover 抬起 —— 不再套版偏移 */
+  --overprint-shadow:
+    0 6px 24px rgba(46, 111, 235, 0.14),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+}

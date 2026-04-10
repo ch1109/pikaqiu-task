@@ -1,19 +1,37 @@
 /* ===== CyberPet 动画集 ===== */
 
-/* 面板弹出 */
+/* 面板弹出 — 带模糊的阻尼入场 */
 @keyframes panel-enter {
   from {
     opacity: 0;
-    transform: scale(0.95) translateY(8px);
+    transform: scale(0.92) translateY(12px);
+    filter: blur(4px);
   }
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+    filter: blur(0);
   }
 }
 
 .animate-panel-enter {
-  animation: panel-enter 200ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: panel-enter 280ms var(--ease-out-expo) forwards;
+}
+
+/* 面板退出 */
+@keyframes panel-exit {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(6px);
+  }
+}
+
+.animate-panel-exit {
+  animation: panel-exit 180ms ease-in forwards;
 }
 
 /* 气泡弹出 */
@@ -49,39 +67,6 @@
 
 .animate-neon-pulse {
   animation: neon-pulse 2s ease-in-out infinite;
-}
-
-/* 超时警告呼吸 */
-@keyframes warn-pulse {
-  0%, 100% {
-    box-shadow: 0 0 4px rgba(255, 184, 0, 0.2);
-    border-color: rgba(255, 184, 0, 0.2);
-  }
-  50% {
-    box-shadow: 0 0 16px rgba(255, 184, 0, 0.5);
-    border-color: rgba(255, 184, 0, 0.6);
-  }
-}
-
-.animate-warn {
-  animation: warn-pulse 1.5s ease-in-out infinite;
-}
-
-/* 完成闪光 */
-@keyframes complete-flash {
-  0% {
-    box-shadow: 0 0 0 rgba(57, 255, 20, 0);
-  }
-  30% {
-    box-shadow: 0 0 20px rgba(57, 255, 20, 0.6);
-  }
-  100% {
-    box-shadow: 0 0 0 rgba(57, 255, 20, 0);
-  }
-}
-
-.animate-complete {
-  animation: complete-flash 600ms ease-out forwards;
 }
 
 /* 卡片交错进入 */
@@ -139,3 +124,358 @@
 .animate-fade-in {
   animation: fade-in 200ms ease forwards;
 }
+
+/* Tab 内容切换 */
+@keyframes tab-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-tab-content {
+  animation: tab-content-enter 220ms var(--ease-out-expo) forwards;
+}
+
+/* 标题栏呼吸光效 */
+@keyframes title-glow-breathe {
+  0%, 100% { text-shadow: 0 0 0 transparent; }
+  50% { text-shadow: 0 1px 8px rgba(230, 57, 70, 0.18); }
+}
+
+.title-breathe {
+  animation: title-glow-breathe 4s ease-in-out infinite;
+}
+
+/* 思考中打字指示器 */
+@keyframes typing-dot {
+  0%, 60%, 100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.typing-dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 16px;
+}
+
+.typing-dots span {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-400);
+}
+
+.typing-dots span:nth-child(1) { animation: typing-dot 1.4s ease-in-out infinite 0ms; }
+.typing-dots span:nth-child(2) { animation: typing-dot 1.4s ease-in-out infinite 200ms; }
+.typing-dots span:nth-child(3) { animation: typing-dot 1.4s ease-in-out infinite 400ms; }
+
+/* 骨架屏闪光 */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-bar {
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--bg-shade) 25%,
+    rgba(26, 26, 46, 0.04) 50%,
+    var(--bg-shade) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.8s ease-in-out infinite;
+}
+
+/* 墨滴下落 —— 替代 celebrate，任务完成时的含蓄印记 */
+@keyframes ink-drip {
+  0% {
+    filter: drop-shadow(0 0 0 transparent);
+    opacity: 1;
+  }
+  30% {
+    filter: drop-shadow(0 2px 4px var(--vermilion-200));
+    opacity: 0.55;
+  }
+  70% {
+    filter: drop-shadow(0 4px 10px var(--vermilion-100));
+    opacity: 0.85;
+  }
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+    opacity: 1;
+  }
+}
+
+.animate-ink-drip {
+  animation: ink-drip 700ms var(--ease-out-expo) forwards;
+}
+
+/* 钢笔尖抖动 —— 替代 loading spinner，AI 拆解 loading 的编辑感 */
+@keyframes shake-nib {
+  0%, 100% { transform: rotate(0deg) translateX(0); }
+  20% { transform: rotate(-3deg) translateX(-0.5px); }
+  40% { transform: rotate(3deg) translateX(0.5px); }
+  60% { transform: rotate(-2deg) translateX(-0.3px); }
+  80% { transform: rotate(2deg) translateX(0.3px); }
+}
+
+.animate-shake-nib {
+  animation: shake-nib 500ms ease-in-out infinite;
+  transform-origin: 70% 70%;
+}
+
+/* 勾选弹跳 */
+@keyframes check-bounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.3); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+.animate-check {
+  animation: check-bounce 400ms var(--ease-spring) forwards;
+}
+
+/* 用户消息弹出 */
+@keyframes message-send {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.95);
+  }
+  60% {
+    transform: translateY(-2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-message-send {
+  animation: message-send 350ms var(--ease-spring) forwards;
+}
+
+/* 气泡退出 */
+@keyframes bubble-exit {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.8) translateY(6px);
+  }
+}
+
+.animate-bubble-exit {
+  animation: bubble-exit 200ms ease-in forwards;
+}
+
+/* 通用加载旋转 */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 墨晕入场 —— 从模糊朱砂到清晰墨色 */
+@keyframes ink-bloom {
+  0% {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(8px);
+    color: var(--accent-primary);
+  }
+  60% {
+    filter: blur(1px);
+    color: var(--accent-primary);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+    color: var(--text-primary);
+  }
+}
+
+.animate-ink {
+  animation: ink-bloom 900ms var(--ease-out-expo) forwards;
+}
+
+/* 折线扩张 —— 水平墨线画出 */
+@keyframes rule-draw {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.animate-rule {
+  animation: rule-draw 720ms var(--ease-out-expo) forwards;
+  transform-origin: left center;
+}
+
+/* 空态箭头提示 — 轻柔上下弹 */
+@keyframes hint-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.55; }
+  50% { transform: translateY(-4px); opacity: 0.9; }
+}
+
+/* 弹层缩放进入 — 带超调 */
+@keyframes popover-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.88) translateY(-4px);
+  }
+  60% {
+    transform: scale(1.02) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-popover {
+  animation: popover-pop 220ms var(--ease-out-back) forwards;
+  transform-origin: top right;
+}
+
+/* Rest 眼睛微呼吸 */
+@keyframes pika-rest-eyes {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.9); }
+}
+
+.pika-rest-eyes {
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: pika-rest-eyes 4s ease-in-out infinite;
+}
+
+/* ===== 皮卡丘动画集 ===== */
+
+/* 上下浮动 (idle) — 柔和呼吸感 */
+@keyframes pika-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+/* 左右摇头思考 (thinking) — 细腻 */
+@keyframes pika-think {
+  0%, 100% { transform: rotate(0deg) translateY(-1px); }
+  30% { transform: rotate(-3deg) translateY(0); }
+  70% { transform: rotate(3deg) translateY(0); }
+}
+
+/* 弹跳 (encourage) — 挤压拉伸，卡通化 */
+@keyframes pika-bounce {
+  0%, 100% { transform: translateY(0) scaleX(1) scaleY(1); }
+  18% { transform: translateY(-18px) scaleX(0.95) scaleY(1.08); }
+  38% { transform: translateY(0) scaleX(1.08) scaleY(0.9); }
+  55% { transform: translateY(-9px) scaleX(0.98) scaleY(1.04); }
+  72% { transform: translateY(0) scaleX(1.03) scaleY(0.96); }
+  88% { transform: translateY(-3px) scaleX(1) scaleY(1.01); }
+}
+
+/* 缓慢摇晃打盹 (rest) */
+@keyframes pika-drowsy {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  25% { transform: rotate(-2.5deg) translateY(1.5px); }
+  75% { transform: rotate(2.5deg) translateY(1.5px); }
+}
+
+/* 眨眼 — scaleY 压扁模拟闭眼 */
+@keyframes pika-blink {
+  0%, 88%, 100% { transform: scaleX(1) scaleY(1); }
+  92% { transform: scaleX(1.06) scaleY(0.05); }
+  95% { transform: scaleX(1) scaleY(1); }
+}
+
+/* 尾巴摇摆 — 自然来回 */
+@keyframes pika-tail-wag {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(8deg); }
+  70% { transform: rotate(-3deg); }
+}
+
+/* 发光呼吸 — 缩放 + 透明度 */
+@keyframes pika-glow-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+/* ZZZ 飘出消散 */
+@keyframes pika-zzz {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  15% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(14px, -24px) scale(1.3); }
+}
+
+/* --- 状态动画类 --- */
+
+.pika-state-idle {
+  animation: pika-float 3.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  will-change: transform;
+}
+
+.pika-state-thinking {
+  animation: pika-think 2.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+.pika-state-encourage {
+  animation: pika-bounce 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+  will-change: transform;
+}
+
+.pika-state-rest {
+  animation: pika-drowsy 5s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* --- SVG 子元素动画（关键：transform-box: fill-box） --- */
+
+/* 眨眼 */
+.pika-eyes {
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: pika-blink 3.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* 尾巴 */
+.pika-tail {
+  transform-box: fill-box;
+  transform-origin: 0% 80%;
+  animation: pika-tail-wag 2.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+.pika-state-rest .pika-tail {
+  animation-duration: 6s;
+}
+
+/* 发光 */
+.pika-glow {
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: pika-glow-pulse 3s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* ZZZ 依次飘出 */
+.pika-zzz-1 { animation: pika-zzz 2.4s ease-out infinite; }
+.pika-zzz-2 { animation: pika-zzz 2.4s ease-out infinite 0.7s; }
+.pika-zzz-3 { animation: pika-zzz 2.4s ease-out infinite 1.4s; }

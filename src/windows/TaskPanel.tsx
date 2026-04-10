@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
+import WindowTitleBar from "@/components/shared/WindowTitleBar";
 import TabBar from "@/components/shared/TabBar";
 import TaskList from "@/components/task/TaskList";
 import TaskTimeline from "@/components/task/TaskTimeline";
@@ -11,11 +11,12 @@ import { useSettingsStore } from "@/stores/useSettingsStore";
 import { scheduleDay } from "@/services/scheduler";
 import { analyzeConflicts } from "@/services/conflictDetector";
 import { setupReminders, clearReminders } from "@/services/reminder";
+import Icon from "@/components/shared/Icon";
 
 const TABS = [
-  { key: "timeline", label: "日程", icon: "⏱" },
-  { key: "tasks", label: "任务", icon: "⚡" },
-  { key: "review", label: "复盘", icon: "📊" },
+  { key: "timeline", label: "日程", icon: <Icon name="calendar-days" size="sm" /> },
+  { key: "tasks", label: "任务", icon: <Icon name="notebook-pen" size="sm" /> },
+  { key: "review", label: "复盘", icon: <Icon name="book-open-text" size="sm" /> },
 ];
 
 interface OvertimeAlert {
@@ -27,7 +28,22 @@ interface OvertimeAlert {
 export default function TaskPanel() {
   const [activeTab, setActiveTab] = useState("tasks");
   const [overtime, setOvertime] = useState<OvertimeAlert | null>(null);
-  const { currentPlan, tasks, subtasks, loading, loadToday, startTask, completeTask, startSubtask, completeSubtask, updateSubtaskStatus } = useTaskStore();
+  const {
+    currentPlan,
+    tasks,
+    subtasks,
+    loading,
+    loadToday,
+    startTask,
+    completeTask,
+    startSubtask,
+    completeSubtask,
+    updateSubtaskStatus,
+    createPlan,
+    addTask,
+    deleteTask,
+    updateTaskFields,
+  } = useTaskStore();
   const { settings, load: loadSettings } = useSettingsStore();
 
   useEffect(() => {
@@ -83,7 +99,47 @@ export default function TaskPanel() {
   const handleCompleteSubtask = useCallback(async (id: number) => { await completeSubtask(id); }, [completeSubtask]);
   const handleSkipSubtask = useCallback(async (id: number) => { await updateSubtaskStatus(id, "skipped"); }, [updateSubtaskStatus]);
 
-  const handleClose = () => getCurrentWindow().close();
+  const handleQuickAdd = useCallback(
+    async (name: string) => {
+      let planId = currentPlan?.id;
+      if (!planId) {
+        const plan = await createPlan("手动录入");
+        planId = plan.id;
+      }
+      await addTask(planId, {
+        name,
+        priority: 3,
+        category: "general",
+        estimated_mins: 30,
+        sort_order: tasks.length,
+      });
+    },
+    [currentPlan, tasks.length, createPlan, addTask]
+  );
+
+  const handleDeleteTask = useCallback(
+    async (id: number) => {
+      await deleteTask(id);
+    },
+    [deleteTask]
+  );
+
+  const handleRenameTask = useCallback(
+    async (id: number, name: string) => {
+      await updateTaskFields(id, { name });
+    },
+    [updateTaskFields]
+  );
+
+  const handleUpdateTaskFields = useCallback(
+    async (
+      id: number,
+      fields: Parameters<typeof updateTaskFields>[1]
+    ) => {
+      await updateTaskFields(id, fields);
+    },
+    [updateTaskFields]
+  );
 
   return (
     <div
@@ -95,55 +151,14 @@ export default function TaskPanel() {
         flexDirection: "column",
       }}
     >
-      {/* 标题栏 */}
-      <div
-        data-tauri-drag-region
-        style={{
-          height: 36,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 12px",
-          borderBottom: "1px solid rgba(0, 240, 255, 0.1)",
-          cursor: "grab",
-          flexShrink: 0,
-        }}
-      >
-        <span
-          className="heading-display"
-          style={{ fontSize: 13, color: "var(--cyan-glow)", letterSpacing: "0.1em" }}
-        >
-          CYBERPET // TASKS
-        </span>
-        <button
-          onClick={handleClose}
-          style={{
-            width: 20,
-            height: 20,
-            border: "none",
-            background: "rgba(255, 60, 172, 0.15)",
-            borderRadius: "50%",
-            color: "var(--magenta-glow)",
-            fontSize: 11,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "var(--transition-fast)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(255, 60, 172, 0.35)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "rgba(255, 60, 172, 0.15)";
-          }}
-        >
-          ✕
-        </button>
+      <div className="stagger-child" style={{ "--stagger-index": 0 } as React.CSSProperties}>
+        <WindowTitleBar title="任务" />
       </div>
 
       {/* Tab 切换 */}
-      <TabBar tabs={TABS} activeKey={activeTab} onChange={setActiveTab} />
+      <div className="stagger-child" style={{ "--stagger-index": 1 } as React.CSSProperties}>
+        <TabBar tabs={TABS} activeKey={activeTab} onChange={setActiveTab} />
+      </div>
 
       {/* 冲突提示 */}
       {activeTab !== "review" && conflictSuggestions.length > 0 && (
@@ -153,45 +168,46 @@ export default function TaskPanel() {
       {/* 内容区 */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {loading && (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--text-muted)",
-              fontSize: 12,
-            }}
-          >
-            加载中...
+          <div style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="skeleton-bar" />
+            <div className="skeleton-bar" style={{ height: 36 }} />
+            <div className="skeleton-bar" style={{ height: 36 }} />
           </div>
         )}
 
-        {!loading && activeTab === "timeline" && (
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            <TaskTimeline
-              blocks={schedule.blocks}
-              workStart={settings?.work_start || "09:00"}
-              workEnd={settings?.work_end || "18:00"}
-            />
+        {!loading && (
+          <div key={activeTab} className="animate-tab-content" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {activeTab === "timeline" && (
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                <TaskTimeline
+                  blocks={schedule.blocks}
+                  workStart={settings?.work_start || "09:00"}
+                  workEnd={settings?.work_end || "18:00"}
+                />
+              </div>
+            )}
+
+            {activeTab === "tasks" && (
+              <TaskList
+                tasks={tasks}
+                subtasks={subtasks}
+                schedule={schedule.blocks}
+                onStartTask={handleStartTask}
+                onCompleteTask={handleCompleteTask}
+                onDeleteTask={handleDeleteTask}
+                onRenameTask={handleRenameTask}
+                onUpdateTaskFields={handleUpdateTaskFields}
+                onStartSubtask={handleStartSubtask}
+                onCompleteSubtask={handleCompleteSubtask}
+                onSkipSubtask={handleSkipSubtask}
+                onQuickAdd={handleQuickAdd}
+              />
+            )}
+
+            {activeTab === "review" && (
+              <DailyReview planId={currentPlan?.id ?? null} tasks={tasks} />
+            )}
           </div>
-        )}
-
-        {!loading && activeTab === "tasks" && (
-          <TaskList
-            tasks={tasks}
-            subtasks={subtasks}
-            schedule={schedule.blocks}
-            onStartTask={handleStartTask}
-            onCompleteTask={handleCompleteTask}
-            onStartSubtask={handleStartSubtask}
-            onCompleteSubtask={handleCompleteSubtask}
-            onSkipSubtask={handleSkipSubtask}
-          />
-        )}
-
-        {!loading && activeTab === "review" && (
-          <DailyReview planId={currentPlan?.id ?? null} tasks={tasks} />
         )}
       </div>
 
@@ -201,7 +217,9 @@ export default function TaskPanel() {
           style={{
             position: "absolute",
             inset: 0,
-            background: "rgba(8, 10, 24, 0.7)",
+            background: "rgba(15, 23, 42, 0.22)",
+            backdropFilter: "blur(4px)",
+            WebkitBackdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -211,45 +229,146 @@ export default function TaskPanel() {
           <div
             className="animate-panel-enter"
             style={{
-              background: "var(--bg-panel)",
-              border: "1px solid rgba(255, 184, 0, 0.3)",
+              position: "relative",
+              background: "var(--paper-0)",
+              border: "1px solid var(--rule-line)",
               borderRadius: "var(--radius-lg)",
-              padding: "20px 24px",
-              maxWidth: 320,
-              textAlign: "center",
+              padding: "24px 26px 20px",
+              width: 340,
+              boxShadow: "var(--shadow-paper-lift)",
             }}
           >
-            <div style={{ fontSize: 24, marginBottom: 8 }}>⏰</div>
-            <div style={{ fontSize: 13, color: "var(--text-primary)", marginBottom: 4 }}>
+            {/* 眉题 */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 12,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  width: 28,
+                  height: 28,
+                  borderRadius: 999,
+                  background: "var(--amber-200)",
+                  color: "var(--amber-600)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Icon name="alert-triangle" size="sm" color="var(--amber-600)" />
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "var(--amber-600)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                超时提醒
+              </span>
+            </div>
+
+            {/* 标题 */}
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 18,
+                fontWeight: 600,
+                lineHeight: 1.35,
+                letterSpacing: "-0.01em",
+                color: "var(--ink-900)",
+                marginBottom: 6,
+              }}
+            >
               {overtime.subtaskName}
             </div>
-            <div style={{ fontSize: 11, color: "var(--amber-glow)", marginBottom: 16 }}>
-              已超过预估时间的 150%
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+
+            {/* 副文 */}
+            <p
+              style={{
+                fontSize: 13,
+                lineHeight: 1.65,
+                color: "var(--ink-500)",
+                marginBottom: 18,
+                marginTop: 0,
+              }}
+            >
+              已超过预估时间的{" "}
+              <span
+                className="text-mono"
+                style={{ color: "var(--amber-600)", fontWeight: 600 }}
+              >
+                150%
+              </span>
+              {" "}—— 需要调整节奏吗?
+            </p>
+
+            {/* 操作行 */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button
+                className="btn btn-ghost"
                 onClick={() => setOvertime(null)}
-                style={overtimeBtn("var(--cyan-glow)", "rgba(0, 240, 255, 0.12)")}
+                style={{
+                  flex: 1,
+                  padding: "9px 14px",
+                  fontSize: 12,
+                  minWidth: 64,
+                }}
               >
                 继续
               </button>
               <button
+                className="btn btn-green"
                 onClick={async () => {
                   await handleCompleteSubtask(overtime.subtaskId);
                   setOvertime(null);
                 }}
-                style={overtimeBtn("var(--neon-green)", "rgba(57, 255, 20, 0.12)")}
+                style={{
+                  flex: 1,
+                  padding: "9px 14px",
+                  fontSize: 12,
+                  minWidth: 64,
+                }}
               >
                 完成
               </button>
               <button
+                className="btn btn-ghost"
                 onClick={async () => {
                   await handleSkipSubtask(overtime.subtaskId);
                   setOvertime(null);
                 }}
-                style={overtimeBtn("var(--text-muted)", "rgba(74, 80, 104, 0.15)")}
+                style={{
+                  flex: 1,
+                  padding: "9px 14px",
+                  fontSize: 12,
+                  minWidth: 64,
+                }}
               >
                 跳过
+              </button>
+              <button
+                className="btn btn-amber"
+                onClick={async () => {
+                  await handleCompleteSubtask(overtime.subtaskId);
+                  setOvertime(null);
+                  await loadToday();
+                }}
+                style={{
+                  flex: 1,
+                  padding: "9px 14px",
+                  fontSize: 12,
+                  minWidth: 64,
+                }}
+              >
+                调整
               </button>
             </div>
           </div>
@@ -259,17 +378,4 @@ export default function TaskPanel() {
   );
 }
 
-function overtimeBtn(color: string, bg: string): React.CSSProperties {
-  return {
-    padding: "6px 16px",
-    border: "none",
-    borderRadius: "var(--radius-sm)",
-    background: bg,
-    color,
-    fontSize: 12,
-    fontFamily: "var(--font-body)",
-    cursor: "pointer",
-    transition: "var(--transition-fast)",
-  };
-}
 

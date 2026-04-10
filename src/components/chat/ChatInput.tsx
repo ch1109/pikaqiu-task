@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import Icon from "@/components/shared/Icon";
 
 const MAX_CHARS = 2000;
 
@@ -11,7 +12,7 @@ interface ChatInputProps {
 export default function ChatInput({
   onSend,
   disabled = false,
-  placeholder = "告诉我你今天要做什么...",
+  placeholder = "整段描述今天的计划，让 AI 帮你规划…",
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -46,25 +47,28 @@ export default function ChatInput({
     }
   };
 
+  const hasText = text.trim().length > 0;
+
   return (
     <div
       style={{
-        padding: "8px 12px 10px",
-        borderTop: "1px solid rgba(0, 240, 255, 0.08)",
+        padding: "14px 20px 18px",
+        background: "var(--paper-1)",
         flexShrink: 0,
+        borderTop: "1px solid var(--rule-line)",
       }}
     >
       <div
-        className="neon-hover-cyan"
+        className="input-container"
         style={{
           display: "flex",
           alignItems: "flex-end",
-          gap: 8,
-          background: "var(--bg-input)",
-          border: "var(--border-glow)",
+          gap: 10,
+          background: "var(--paper-0)",
+          border: "1px solid var(--ink-200)",
           borderRadius: "var(--radius-md)",
-          padding: "8px 10px",
-          transition: "var(--transition-fast)",
+          padding: "12px 14px",
+          transition: "border-color 180ms ease, box-shadow 180ms ease",
         }}
       >
         <textarea
@@ -80,51 +84,37 @@ export default function ChatInput({
             border: "none",
             background: "transparent",
             color: "var(--text-primary)",
-            fontSize: 13,
+            fontSize: 14,
             fontFamily: "var(--font-body)",
-            lineHeight: 1.5,
+            lineHeight: 1.65,
             resize: "none",
             outline: "none",
             maxHeight: 120,
-            minHeight: 20,
+            minHeight: 22,
           }}
         />
         <button
+          className="btn btn-icon"
           onClick={handleSend}
-          disabled={disabled || !text.trim()}
+          disabled={disabled || !hasText}
           style={{
-            width: 32,
-            height: 32,
+            width: 34,
+            height: 34,
             flexShrink: 0,
-            border: "none",
-            borderRadius: "var(--radius-sm)",
-            background:
-              disabled || !text.trim()
-                ? "rgba(0, 240, 255, 0.06)"
-                : "rgba(0, 240, 255, 0.15)",
-            color:
-              disabled || !text.trim()
-                ? "var(--text-muted)"
-                : "var(--cyan-glow)",
-            fontSize: 15,
-            cursor: disabled || !text.trim() ? "not-allowed" : "pointer",
-            transition: "var(--transition-fast)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onMouseEnter={(e) => {
-            if (!disabled && text.trim())
-              e.currentTarget.style.background = "rgba(0, 240, 255, 0.25)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background =
-              disabled || !text.trim()
-                ? "rgba(0, 240, 255, 0.06)"
-                : "rgba(0, 240, 255, 0.15)";
+            borderRadius: 999,
+            background: hasText && !disabled
+              ? "var(--vermilion-600)"
+              : "var(--vermilion-100)",
+            color: hasText && !disabled
+              ? "#FFFFFF"
+              : "var(--vermilion-600)",
+            boxShadow: hasText && !disabled
+              ? "0 4px 14px rgba(46, 111, 235, 0.28)"
+              : "none",
+            transition: "background 180ms ease, box-shadow 180ms ease, transform 120ms ease",
           }}
         >
-          ▶
+          <Icon name="send-horizontal" size="sm" accent color="currentColor" />
         </button>
       </div>
       {text.length > MAX_CHARS * 0.8 && (
@@ -132,12 +122,13 @@ export default function ChatInput({
           className="text-mono"
           style={{
             textAlign: "right",
-            marginTop: 4,
+            marginTop: 6,
             color:
               text.length >= MAX_CHARS
-                ? "var(--coral-warn)"
+                ? "var(--seal-red)"
                 : "var(--text-muted)",
-            fontSize: 10,
+            fontSize: 11,
+            letterSpacing: "-0.01em",
           }}
         >
           {text.length}/{MAX_CHARS}

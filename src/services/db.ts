@@ -32,9 +32,9 @@ async function runMigrations(database: Database) {
         work_end TEXT NOT NULL DEFAULT '18:00',
         break_mins INTEGER NOT NULL DEFAULT 10,
         llm_mode TEXT NOT NULL DEFAULT 'api' CHECK (llm_mode IN ('api','local')),
-        llm_api_url TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
-        llm_api_key TEXT NOT NULL DEFAULT '',
-        llm_model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+        llm_api_url TEXT NOT NULL DEFAULT 'https://ark.cn-beijing.volces.com/api/coding/v1',
+        llm_api_key TEXT NOT NULL DEFAULT 'f634f22e-6059-4430-a3d6-0f4de4a60e8e',
+        llm_model TEXT NOT NULL DEFAULT 'doubao-seed-2-0-code-preview-260215',
         local_model_path TEXT NOT NULL DEFAULT '',
         pet_x REAL NOT NULL DEFAULT 100.0,
         pet_y REAL NOT NULL DEFAULT 100.0,
@@ -131,5 +131,20 @@ async function runMigrations(database: Database) {
     await database.execute("CREATE INDEX IF NOT EXISTS idx_plans_date ON daily_plans(date)");
 
     await database.execute("INSERT INTO _migrations (name) VALUES ('001_init')");
+  }
+
+  // 迁移 002：更新默认 LLM 配置为火山引擎 Coding API
+  const applied002 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '002_volcano_llm'"
+  );
+  if (applied002.length === 0) {
+    await database.execute(
+      `UPDATE settings SET
+        llm_api_url = 'https://ark.cn-beijing.volces.com/api/coding/v1',
+        llm_api_key = 'f634f22e-6059-4430-a3d6-0f4de4a60e8e',
+        llm_model = 'doubao-seed-2-0-code-preview-260215'
+      WHERE id = 1 AND llm_api_key = ''`
+    );
+    await database.execute("INSERT INTO _migrations (name) VALUES ('002_volcano_llm')");
   }
 }

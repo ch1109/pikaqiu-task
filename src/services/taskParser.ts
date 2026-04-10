@@ -75,3 +75,23 @@ export function parseTaskDecomposeResult(raw: string): TaskDecomposeResult {
   const json = extractJSON(raw);
   return TaskDecomposeResultSchema.parse(json);
 }
+
+// 任务修改意图 schema
+const TaskModifyResultSchema = z.object({
+  intent: z.enum(["add", "delete", "modify", "redecompose"]),
+  target_task: z.string().nullable(),
+  new_tasks_description: z.string().nullable().optional(),
+  changes: z.object({
+    deadline: z.string().nullable().optional(),
+    priority: z.number().int().min(1).max(5).nullable().optional(),
+    estimated_mins: z.number().int().positive().nullable().optional(),
+  }).nullable().optional(),
+  redecompose_instruction: z.string().nullable().optional(),
+});
+
+export type TaskModifyResult = z.infer<typeof TaskModifyResultSchema>;
+
+export function parseTaskModifyResult(raw: string): TaskModifyResult {
+  const json = extractJSON(raw);
+  return TaskModifyResultSchema.parse(json);
+}

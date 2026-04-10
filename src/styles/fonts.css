@@ -1,8 +1,5 @@
-/* Rajdhani - 棱角科技感标题 */
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap');
+/* DM Sans — 几何感无衬线，正文与标题统一使用 */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 
-/* Nunito - 圆润可爱正文 */
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap');
-
-/* JetBrains Mono - 等宽数据展示 */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+/* DM Mono — 等宽，数据与时间展示 */
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');

@@ -1,62 +1,89 @@
-/* ===== Neon Kawaii Terminal 设计系统 ===== */
+/* ===== Editorial Kawaii 设计系统（亮色 / 印刷美学） ===== */
 
 :root {
-  /* 字体 */
-  --font-display: 'Rajdhani', sans-serif;
-  --font-body: 'Nunito', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* ===== 字体 ===== */
+  --font-display: 'DM Sans', 'PingFang SC', system-ui, sans-serif;
+  --font-body: 'DM Sans', 'PingFang SC', system-ui, sans-serif;
+  --font-mono: 'DM Mono', 'SF Mono', monospace;
 
-  /* 底色 - 深空背景 */
-  --bg-void: rgba(8, 10, 24, 0.92);
-  --bg-panel: rgba(14, 18, 38, 0.88);
-  --bg-card: rgba(22, 28, 52, 0.85);
-  --bg-hover: rgba(30, 38, 68, 0.9);
-  --bg-input: rgba(10, 12, 28, 0.6);
+  /* ===== 底色（alias → tokens.css paper 系列）===== */
+  --bg-void: var(--paper-2);
+  --bg-panel: var(--paper-1);
+  --bg-paper: var(--paper-0);
+  --bg-card: var(--paper-0);
+  --bg-hover: var(--paper-3);
+  --bg-input: var(--paper-0);
+  --bg-shade: var(--paper-3);
 
-  /* 主色 - 霓虹青（科技感） */
-  --cyan-glow: #00F0FF;
-  --cyan-dim: #0A8A94;
-  --cyan-bg: rgba(0, 240, 255, 0.08);
+  /* ===== 墨色文字（alias → tokens.css ink 系列）===== */
+  --text-primary: var(--ink-800);
+  --text-secondary: var(--ink-600);
+  --text-muted: var(--ink-500);
+  --text-faint: var(--ink-300);
 
-  /* 强调色 - 樱花洋红（可爱感） */
-  --magenta-glow: #FF3CAC;
-  --magenta-dim: #A0276E;
-  --magenta-bg: rgba(255, 60, 172, 0.08);
+  /* ===== 主强调色：朱砂红（alias → vermilion 系列）===== */
+  --accent-primary: var(--vermilion-600);
+  --accent-primary-hover: var(--vermilion-700);
+  --accent-primary-soft: var(--vermilion-200);
+  --accent-primary-softer: var(--vermilion-100);
+  --accent-primary-border: var(--vermilion-400);
 
-  /* 辅助色 */
-  --lavender: #B4A0FF;
-  --neon-green: #39FF14;
-  --amber-glow: #FFB800;
-  --coral-warn: #FF6B6B;
+  /* ===== 次强调：墨水靛蓝（alias → indigo 系列）===== */
+  --accent-indigo: var(--indigo-600);
+  --accent-indigo-soft: var(--indigo-200);
+  --accent-indigo-softer: var(--indigo-100);
 
-  /* 文字 */
-  --text-primary: #E8ECF4;
-  --text-secondary: #8890A4;
-  --text-muted: #4A5068;
+  /* ===== 成功色：青苔绿（alias → moss 系列）===== */
+  --accent-success: var(--moss-600);
+  --accent-success-soft: var(--moss-200);
+  --accent-success-softer: var(--moss-100);
 
-  /* 发光效果 */
-  --glow-cyan: 0 0 12px rgba(0, 240, 255, 0.4);
-  --glow-magenta: 0 0 12px rgba(255, 60, 172, 0.4);
-  --glow-green: 0 0 10px rgba(57, 255, 20, 0.3);
-  --glow-amber: 0 0 10px rgba(255, 184, 0, 0.3);
+  /* ===== 警告/琥珀（alias → amber 系列）===== */
+  --accent-warn: var(--amber-600);
+  --accent-warn-soft: var(--amber-200);
 
-  /* 边框 */
-  --border-glass: 1px solid rgba(255, 255, 255, 0.06);
-  --border-glow: 1px solid rgba(0, 240, 255, 0.2);
-  --border-magenta: 1px solid rgba(255, 60, 172, 0.2);
+  /* ===== 危险：深红（alias → seal-red）===== */
+  --accent-danger: var(--seal-red);
+  --accent-danger-soft: rgba(158, 27, 36, 0.10);
 
-  /* 圆角 */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  /* ===== 紫罗兰 —— 已删除，学习分类合并到 indigo；alias 暂指 indigo ===== */
+  --accent-violet: var(--indigo-600);
+  --accent-violet-soft: var(--indigo-200);
 
-  /* 过渡 */
+  /* ===== 皮卡丘配色（不变，它本来就是亮色角色） ===== */
+  --pika-yellow: #FFD700;
+  --pika-yellow-light: #FFE968;
+  --pika-brown: #C8A200;
+  --pika-cheek: #FF6B6B;
+  --pika-dark: #2A2A2A;
+
+  /* ===== 边框线 ===== */
+  --border-ink: 1px solid var(--rule-line);             /* 墨线强 */
+  --border-ink-soft: 1px solid var(--rule-line-dim);    /* 墨线弱 */
+  --border-glass: 1px solid var(--rule-line-dim);       /* 旧名兼容 */
+  --border-glow: 1px solid var(--accent-primary-border);
+  --border-magenta: 1px solid rgba(29, 53, 87, 0.25);
+
+  /* ===== 阴影 / 发光 ===== */
+  --shadow-sm: 0 1px 2px rgba(21, 21, 31, 0.05);
+  --shadow-md: var(--shadow-paper-mid);
+  --shadow-lg: var(--shadow-paper-lift);
+  --shadow-paper: var(--shadow-paper-low);
+
+  /* ===== 过渡 ===== */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
   --transition-smooth: 350ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* 间距 */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-quint: cubic-bezier(0.86, 0, 0.07, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.3, 0.64, 1);
+
+  --stagger-fast: 50ms;
+  --stagger-normal: 80ms;
+
+  /* ===== 间距 ===== */
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;
@@ -82,7 +109,8 @@ html, body, #root {
   font-family: var(--font-body);
   color: var(--text-primary);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.65;
+  font-feature-settings: "ss01", "tnum";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
@@ -90,7 +118,8 @@ html, body, #root {
 
 /* ===== 滚动条定制 ===== */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -98,39 +127,23 @@ html, body, #root {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--cyan-dim);
-  border-radius: 2px;
+  background: var(--rule-line-strong);
+  border-radius: 3px;
+  transition: background 150ms ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--cyan-glow);
+  background: var(--accent-primary);
 }
 
-/* ===== 玻璃拟态基础 ===== */
+/* ===== 纸张面板 —— WildCard 纯白卡片 ===== */
 .glass-panel {
-  background: var(--bg-panel);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: var(--border-glass);
+  background: var(--paper-0);
+  border: 1px solid var(--rule-line);
   border-radius: var(--radius-lg);
   position: relative;
   overflow: hidden;
-}
-
-/* 扫描线纹理叠加 */
-.glass-panel::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 240, 255, 0.015) 2px,
-    rgba(0, 240, 255, 0.015) 4px
-  );
-  pointer-events: none;
-  z-index: 0;
+  box-shadow: var(--shadow-paper-mid);
 }
 
 .glass-panel > * {
@@ -141,28 +154,314 @@ html, body, #root {
 /* ===== 排版 ===== */
 .heading-display {
   font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.display-number {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.03em;
+  line-height: 0.9;
+  color: var(--text-primary);
+}
+
+/* 大写标签 —— DM Sans 大写 */
+.smallcaps {
+  font-family: var(--font-display);
+  font-feature-settings: "tnum";
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .text-mono {
   font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
+  font-feature-settings: "tnum";
 }
 
-/* ===== 霓虹辉光交互 ===== */
+/* ===== 水平分隔线 ===== */
+.rule-hr {
+  border: none;
+  height: 1px;
+  background: var(--rule-line);
+  margin: 0;
+}
+
+.rule-hr--dotted {
+  height: 0;
+  border-top: 1px dotted var(--rule-line-strong);
+  background: transparent;
+}
+
+/* ===== 霓虹辉光交互（保持名字，改为纸张浮起） ===== */
 .neon-hover-cyan {
-  transition: box-shadow var(--transition-normal), border-color var(--transition-normal);
+  transition:
+    box-shadow var(--transition-normal),
+    border-color var(--transition-normal),
+    transform var(--transition-normal);
 }
 
 .neon-hover-cyan:hover {
-  box-shadow: var(--glow-cyan);
-  border-color: rgba(0, 240, 255, 0.35);
+  box-shadow: var(--overprint-shadow);
+  border-color: var(--ink-700);
+  transform: translateY(-1px);
 }
 
 .neon-hover-magenta:hover {
-  box-shadow: var(--glow-magenta);
-  border-color: rgba(255, 60, 172, 0.35);
+  box-shadow: 0 4px 16px rgba(29, 53, 87, 0.12);
+  border-color: rgba(29, 53, 87, 0.3);
+}
+
+/* ===== 按钮交互系统 ===== */
+
+.btn {
+  border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    transform 80ms ease,
+    box-shadow 180ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:active {
+  transform: scale(0.96);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* 图标按钮 */
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 主按钮 —— 白底蓝框 pill（WildCard CTA） */
+.btn-cyan {
+  background: #FFFFFF;
+  color: var(--accent-primary);
+  border: 1.5px solid var(--accent-primary);
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(46, 111, 235, 0.08);
+}
+
+.btn-cyan:hover {
+  background: var(--accent-primary);
+  color: #FFFFFF;
+  box-shadow: 0 4px 16px rgba(46, 111, 235, 0.24);
+  transform: translateY(-1px);
+}
+
+/* 成功按钮 pill */
+.btn-green {
+  background: #FFFFFF;
+  color: var(--accent-success);
+  border: 1.5px solid var(--accent-success);
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-weight: 500;
+}
+
+.btn-green:hover {
+  background: var(--accent-success);
+  color: #FFFFFF;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.22);
+  transform: translateY(-1px);
+}
+
+/* 幽灵按钮 */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+}
+
+.btn-ghost:hover {
+  background: var(--paper-3);
+  color: var(--accent-primary);
+}
+
+/* 危险按钮 pill */
+.btn-danger {
+  background: #FFFFFF;
+  color: var(--accent-danger);
+  border: 1.5px solid var(--accent-danger);
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-weight: 500;
+}
+
+.btn-danger:hover {
+  background: var(--accent-danger);
+  color: #FFFFFF;
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.22);
+  transform: translateY(-1px);
+}
+
+/* 静音按钮 */
+.btn-muted {
+  background: var(--ink-100);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+}
+
+.btn-muted:hover {
+  background: var(--ink-200);
+  color: var(--text-primary);
+}
+
+/* 琥珀 pill */
+.btn-amber {
+  background: #FFFFFF;
+  color: var(--accent-warn);
+  border: 1.5px solid var(--accent-warn);
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-weight: 500;
+}
+
+.btn-amber:hover {
+  background: var(--accent-warn);
+  color: #FFFFFF;
+}
+
+/* 关闭按钮 —— 圆形，蓝 hover */
+.btn-close {
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 999px;
+}
+
+.btn-close:hover {
+  background: var(--accent-primary-soft);
+  color: var(--accent-primary);
+}
+
+/* ===== 输入框 ===== */
+.input-field {
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-md);
+  background: var(--paper-0);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  outline: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.input-field:focus {
+  border-color: var(--accent-primary);
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px var(--accent-primary-soft);
+}
+
+.input-field::placeholder {
+  color: var(--text-muted);
+}
+
+.input-container {
+  transition: border-color 180ms ease, box-shadow 200ms ease, background 180ms ease;
+}
+
+.input-container:focus-within {
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 0 3px var(--accent-primary-soft);
+  background: #FFFFFF !important;
+}
+
+/* ===== 菜单项 ===== */
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease, transform 80ms ease, color 120ms ease;
+  text-align: left;
+}
+
+.menu-item:hover {
+  background: var(--accent-primary-soft);
+  color: var(--accent-primary);
+}
+
+.menu-item--danger {
+  color: var(--accent-danger);
+}
+
+.menu-item--danger:hover {
+  background: var(--accent-danger-soft);
+  color: var(--accent-danger);
+}
+
+.menu-item:active {
+  transform: scale(0.98);
+}
+
+/* ===== 层叠入场 ===== */
+.stagger-child {
+  opacity: 0;
+  animation: stagger-fade-up 340ms var(--ease-out-expo) forwards;
+  animation-delay: calc(var(--stagger-index, 0) * var(--stagger-fast));
+}
+
+@keyframes stagger-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== 装饰标记（编辑风) ===== */
+.rule-mark {
+  position: relative;
+}
+
+.rule-mark::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 20px;
+  height: 2px;
+  background: var(--accent-primary);
+  border-radius: 1px;
+}
+
+/* ===== 选中文字颜色 ===== */
+::selection {
+  background: var(--accent-primary-soft);
+  color: var(--accent-primary);
 }

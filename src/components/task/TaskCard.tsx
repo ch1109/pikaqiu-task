@@ -1,21 +1,10 @@
-import { useState } from "react";
-import type { Task, SubTask, ScheduledBlock } from "@/types/task";
+import { useEffect, useRef, useState } from "react";
+import type { Task, SubTask, ScheduledBlock, TaskCategory } from "@/types/task";
 import SubTaskItem from "./SubTaskItem";
-
-const priorityColors: Record<number, string> = {
-  1: "var(--coral-warn)",
-  2: "var(--magenta-glow)",
-  3: "var(--cyan-glow)",
-  4: "var(--lavender)",
-  5: "var(--text-muted)",
-};
-
-const categoryLabels: Record<string, string> = {
-  work: "工作",
-  study: "学习",
-  life: "生活",
-  general: "通用",
-};
+import TaskDetailsPopover from "./TaskDetailsPopover";
+import { priorityColors, categoryLabels } from "./taskMeta";
+import { useTaskDecompose } from "@/hooks/useTaskDecompose";
+import Icon from "@/components/shared/Icon";
 
 interface TaskCardProps {
   task: Task;
@@ -24,6 +13,17 @@ interface TaskCardProps {
   index: number;
   onStartTask: (id: number) => void;
   onCompleteTask: (id: number) => void;
+  onDeleteTask: (id: number) => void;
+  onRenameTask: (id: number, name: string) => void;
+  onUpdateFields: (
+    id: number,
+    fields: {
+      priority?: number;
+      category?: TaskCategory;
+      deadline?: string | null;
+      estimated_mins?: number;
+    }
+  ) => void;
   onStartSubtask: (id: number) => void;
   onCompleteSubtask: (id: number) => void;
   onSkipSubtask: (id: number) => void;
@@ -36,65 +36,103 @@ export default function TaskCard({
   index,
   onStartTask,
   onCompleteTask,
+  onDeleteTask,
+  onRenameTask,
+  onUpdateFields,
   onStartSubtask,
   onCompleteSubtask,
   onSkipSubtask,
 }: TaskCardProps) {
-  const [expanded, setExpanded] = useState(
-    task.status === "active" || task.status === "pending"
-  );
+  const [expanded, setExpanded] = useState(task.status === "active");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState(task.name);
+  const [decomposeError, setDecomposeError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
-  const completedCount = subtasks.filter(
-    (s) => s.status === "completed"
-  ).length;
+  const decomposer = useTaskDecompose(task);
+
+  useEffect(() => {
+    if (editingName) {
+      setDraftName(task.name);
+      // 下一帧再聚焦与全选，避免初次 render 未完成
+      requestAnimationFrame(() => {
+        nameInputRef.current?.focus();
+        nameInputRef.current?.select();
+      });
+    }
+  }, [editingName, task.name]);
+
+  const completedCount = subtasks.filter((s) => s.status === "completed").length;
   const totalCount = subtasks.length;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
   const isCompleted = task.status === "completed";
   const isActive = task.status === "active";
-  const priorityColor = priorityColors[task.priority] || "var(--cyan-glow)";
+  const priorityColor = priorityColors[task.priority] || "var(--accent-primary)";
 
-  // 为子任务匹配排程时间
-  const scheduleMap = new Map(
-    schedule.map((b) => [b.subtask.id, b.start])
-  );
+  const scheduleMap = new Map(schedule.map((b) => [b.subtask.id, b.start]));
+  const catInfo = categoryLabels[task.category] || categoryLabels.general;
+  const hasSubtasks = totalCount > 0;
+
+  const commitName = () => {
+    const trimmed = draftName.trim();
+    if (trimmed && trimmed !== task.name) {
+      onRenameTask(task.id, trimmed);
+    }
+    setEditingName(false);
+  };
+
+  const cancelEditName = () => {
+    setDraftName(task.name);
+    setEditingName(false);
+  };
+
+  const handleDecompose = async () => {
+    setDecomposeError(null);
+    try {
+      await decomposer.decompose();
+      setExpanded(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "拆解失败";
+      setDecomposeError(msg);
+      setTimeout(() => setDecomposeError(null), 3000);
+    }
+  };
 
   return (
     <div
-      className="animate-card-enter"
+      className="animate-card-enter neon-hover-cyan"
       style={{
         "--i": index,
-        background: "var(--bg-card)",
+        position: "relative",
+        background: "var(--paper-0)",
         border: isActive
-          ? "1px solid rgba(0, 240, 255, 0.25)"
-          : "var(--border-glass)",
-        borderRadius: "var(--radius-md)",
-        overflow: "hidden",
-        opacity: isCompleted ? 0.6 : 1,
+          ? "1px solid var(--accent-primary)"
+          : "1px solid var(--rule-line)",
+        borderLeft: isActive
+          ? "3px solid var(--accent-primary)"
+          : `3px solid ${priorityColor}`,
+        borderRadius: "var(--radius-lg)",
+        overflow: detailsOpen ? "visible" : "hidden",
+        opacity: isCompleted ? 0.55 : 1,
         transition: "var(--transition-normal)",
+        cursor: "default",
+        boxShadow: "var(--shadow-paper-low)",
       } as React.CSSProperties}
     >
       {/* 卡片头部 */}
       <div
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => {
+          if (!editingName && !detailsOpen) setExpanded(!expanded);
+        }}
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          padding: "10px 12px",
-          cursor: "pointer",
+          gap: 10,
+          padding: "16px 18px",
+          cursor: editingName ? "text" : "pointer",
         }}
       >
-        {/* 优先级标记 */}
-        <div
-          style={{
-            width: 3,
-            height: 28,
-            borderRadius: 2,
-            background: priorityColor,
-            flexShrink: 0,
-          }}
-        />
-
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
@@ -102,140 +140,301 @@ export default function TaskCard({
               alignItems: "center",
               gap: 6,
             }}
+            onClick={(e) => {
+              if (editingName) e.stopPropagation();
+            }}
           >
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: isCompleted
-                  ? "var(--text-muted)"
-                  : "var(--text-primary)",
-                textDecoration: isCompleted ? "line-through" : "none",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {task.name}
-            </span>
+            {editingName ? (
+              <input
+                ref={nameInputRef}
+                type="text"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitName();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelEditName();
+                  }
+                }}
+                onBlur={commitName}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: "var(--font-body)",
+                  color: "var(--text-primary)",
+                  background: "var(--accent-primary-softer)",
+                  border: "none",
+                  borderBottom: "1px solid var(--accent-primary)",
+                  outline: "none",
+                  padding: "1px 4px",
+                  minWidth: 0,
+                }}
+              />
+            ) : (
+              <span
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditingName(true);
+                }}
+                title="双击编辑"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  lineHeight: 1.45,
+                  color: isCompleted
+                    ? "var(--text-muted)"
+                    : "var(--text-primary)",
+                  textDecoration: isCompleted ? "line-through" : "none",
+                  wordBreak: "break-word",
+                  flex: 1,
+                  minWidth: 0,
+                }}
+              >
+                {task.name}
+              </span>
+            )}
           </div>
 
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
-              marginTop: 2,
+              gap: 10,
+              marginTop: 5,
             }}
           >
             <span
-              className="text-mono"
-              style={{ fontSize: 10, color: "var(--text-muted)" }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 11,
+                fontFamily: "var(--font-display)",
+                fontWeight: 600,
+                color: catInfo.color,
+                background: catInfo.bg,
+                padding: "4px 10px 4px 8px",
+                borderRadius: 999,
+                letterSpacing: "0.02em",
+              }}
             >
-              {categoryLabels[task.category] || task.category}
+              <Icon name={catInfo.icon} size="xs" color={catInfo.color} />
+              {catInfo.text}
             </span>
             {task.deadline && (
-              <span
-                className="text-mono"
-                style={{ fontSize: 10, color: "var(--amber-glow)" }}
-              >
-                DDL {task.deadline}
-              </span>
+              <>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 1,
+                    height: 10,
+                    background: "var(--rule-line)",
+                    display: "inline-block",
+                  }}
+                />
+                <span
+                  className="text-mono"
+                  style={{ fontSize: 11, color: "var(--amber-600)", letterSpacing: "-0.01em" }}
+                >
+                  DDL {task.deadline}
+                </span>
+              </>
             )}
             <span
+              aria-hidden="true"
+              style={{
+                width: 1,
+                height: 10,
+                background: "var(--rule-line)",
+                display: "inline-block",
+              }}
+            />
+            <span
               className="text-mono"
-              style={{ fontSize: 10, color: "var(--text-muted)" }}
+              style={{ fontSize: 11, color: "var(--text-muted)", letterSpacing: "-0.01em" }}
             >
               {task.estimated_mins}m
             </span>
+            {decomposeError && (
+              <span
+                className="text-mono"
+                style={{
+                  fontSize: 11,
+                  color: "var(--seal-red)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <Icon name="alert-triangle" size="xs" color="var(--seal-red)" />
+                {decomposeError}
+              </span>
+            )}
           </div>
         </div>
 
         {/* 进度条 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        {hasSubtasks && (
           <div
             style={{
-              width: 40,
-              height: 3,
-              borderRadius: 2,
-              background: "rgba(255,255,255,0.06)",
-              overflow: "hidden",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                width: `${progress}%`,
-                height: "100%",
-                borderRadius: 2,
-                background:
-                  progress >= 100
-                    ? "var(--neon-green)"
-                    : "var(--cyan-glow)",
-                transition: "width 400ms ease",
+                width: 52,
+                height: 4,
+                background: "var(--ink-100)",
+                overflow: "hidden",
+                borderRadius: 999,
               }}
-            />
-          </div>
-          <span
-            className="text-mono"
-            style={{
-              fontSize: 10,
-              color:
-                progress >= 100 ? "var(--neon-green)" : "var(--text-muted)",
-            }}
-          >
-            {completedCount}/{totalCount}
-          </span>
-        </div>
-
-        {/* 操作按钮 */}
-        {!isCompleted && (
-          <div
-            style={{ display: "flex", gap: 4, flexShrink: 0 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {task.status === "pending" && (
-              <button
-                onClick={() => onStartTask(task.id)}
-                style={actionBtn("var(--cyan-glow)", "rgba(0, 240, 255, 0.12)")}
-                title="开始任务"
-              >
-                ▶
-              </button>
-            )}
-            {isActive && (
-              <button
-                onClick={() => onCompleteTask(task.id)}
-                style={actionBtn(
-                  "var(--neon-green)",
-                  "rgba(57, 255, 20, 0.12)"
-                )}
-                title="完成任务"
-              >
-                ✓
-              </button>
-            )}
+            >
+              <div
+                style={{
+                  width: `${progress}%`,
+                  height: "100%",
+                  background:
+                    progress >= 100
+                      ? "var(--moss-600)"
+                      : "var(--vermilion-600)",
+                  transition: "width 400ms ease",
+                  borderRadius: 999,
+                }}
+              />
+            </div>
+            <span
+              className="text-mono"
+              style={{
+                fontSize: 11,
+                letterSpacing: "-0.01em",
+                color:
+                  progress >= 100 ? "var(--moss-600)" : "var(--ink-500)",
+              }}
+            >
+              {completedCount}/{totalCount}
+            </span>
           </div>
         )}
 
-        {/* 展开/折叠 */}
-        <span
-          style={{
-            fontSize: 10,
-            color: "var(--text-muted)",
-            transform: expanded ? "rotate(90deg)" : "rotate(0)",
-            transition: "transform 200ms ease",
-          }}
+        {/* 操作按钮组 */}
+        <div
+          style={{ display: "flex", gap: 4, flexShrink: 0 }}
+          onClick={(e) => e.stopPropagation()}
         >
-          ▶
-        </span>
+          {/* 开始/完成 */}
+          {!isCompleted && task.status === "pending" && (
+            <button
+              className="btn btn-icon"
+              onClick={() => onStartTask(task.id)}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: "var(--radius-sm)",
+                background: "var(--ink-50)",
+                color: "var(--ink-700)",
+                transition: "background 180ms ease, color 180ms ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--vermilion-200)";
+                e.currentTarget.style.color = "var(--vermilion-600)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--ink-50)";
+                e.currentTarget.style.color = "var(--ink-700)";
+              }}
+              title="开始任务"
+            >
+              <Icon name="play" size="xs" fill color="currentColor" />
+            </button>
+          )}
+          {!isCompleted && isActive && (
+            <button
+              className="btn btn-icon"
+              onClick={() => onCompleteTask(task.id)}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: "var(--radius-sm)",
+                background: "var(--ink-50)",
+                color: "var(--ink-800)",
+                transition: "background 180ms ease, color 180ms ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--moss-200)";
+                e.currentTarget.style.color = "var(--moss-600)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--ink-50)";
+                e.currentTarget.style.color = "var(--ink-800)";
+              }}
+              title="完成任务"
+            >
+              <Icon name="check" size="xs" accent color="currentColor" />
+            </button>
+          )}
+
+          {/* 详情按钮 */}
+          {!isCompleted && (
+            <button
+              className="btn btn-icon btn-ghost"
+              onClick={() => setDetailsOpen((v) => !v)}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: "var(--radius-sm)",
+              }}
+              title="详情"
+            >
+              <Icon name="more-horizontal" size="sm" color="var(--ink-500)" />
+            </button>
+          )}
+        </div>
+
+        {/* 展开/折叠指示 */}
+        {hasSubtasks && (
+          <span
+            style={{
+              display: "inline-flex",
+              color: "var(--ink-400)",
+              transform: expanded ? "rotate(90deg)" : "rotate(0)",
+              transition: "transform 200ms ease",
+              flexShrink: 0,
+              marginLeft: 2,
+            }}
+          >
+            <Icon name="chevron-right" size="xs" color="var(--ink-400)" />
+          </span>
+        )}
       </div>
 
+      {/* 详情弹层 */}
+      {detailsOpen && (
+        <TaskDetailsPopover
+          task={task}
+          hasSubtasks={hasSubtasks}
+          decomposing={decomposer.loading}
+          onUpdate={(fields) => onUpdateFields(task.id, fields)}
+          onDecompose={handleDecompose}
+          onDelete={() => onDeleteTask(task.id)}
+          onClose={() => setDetailsOpen(false)}
+        />
+      )}
+
       {/* 子任务列表 */}
-      {expanded && subtasks.length > 0 && (
+      {expanded && hasSubtasks && (
         <div
           style={{
-            padding: "0 12px 8px 23px",
-            borderTop: "1px solid rgba(255,255,255,0.03)",
+            padding: "10px 18px 14px 28px",
+            background: "var(--paper-1)",
+            borderTop: "1px solid var(--rule-line)",
           }}
         >
           {subtasks.map((sub) => (
@@ -252,21 +451,4 @@ export default function TaskCard({
       )}
     </div>
   );
-}
-
-function actionBtn(color: string, bg: string): React.CSSProperties {
-  return {
-    width: 24,
-    height: 24,
-    border: "none",
-    borderRadius: "var(--radius-sm)",
-    background: bg,
-    color,
-    fontSize: 11,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    transition: "var(--transition-fast)",
-  };
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import ChatMessageItem from "./ChatMessage";
+import SectionMasthead from "@/components/shared/SectionMasthead";
 import type { ChatMessage } from "@/types/chat";
 
 interface ChatHistoryProps {
@@ -19,10 +20,10 @@ export default function ChatHistory({ messages, loading }: ChatHistoryProps) {
       style={{
         flex: 1,
         overflowY: "auto",
-        padding: "12px 14px",
+        padding: "20px 22px 24px",
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: 14,
       }}
     >
       {messages.length === 0 && !loading && (
@@ -31,26 +32,80 @@ export default function ChatHistory({ messages, loading }: ChatHistoryProps) {
             flex: 1,
             display: "flex",
             flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            color: "var(--text-muted)",
+            alignItems: "flex-start",
+            justifyContent: "flex-start",
+            gap: 18,
+            position: "relative",
           }}
         >
-          <div style={{ fontSize: 28 }}>🤖</div>
+          {/* 章节刊头 */}
+          <SectionMasthead variant="dialogue" subtitle="开启一场新对话" />
+
+          {/* 大号问候 */}
           <div
+            className="animate-ink"
             style={{
-              fontSize: 13,
-              fontFamily: "var(--font-body)",
-              textAlign: "center",
-              lineHeight: 1.6,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              marginTop: 4,
+              animationDelay: "140ms",
             }}
           >
-            嗨! 告诉我你今天的计划
-            <br />
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              比如: "上午写周报，下午3点开会，晚上健身"
+            <h1
+              style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 600,
+                fontSize: 26,
+                lineHeight: 1.15,
+                letterSpacing: "-0.02em",
+                color: "var(--ink-900)",
+                margin: 0,
+              }}
+            >
+              你好呀 👋
+            </h1>
+            <span
+              style={{
+                fontSize: 15,
+                color: "var(--ink-500)",
+                lineHeight: 1.55,
+              }}
+            >
+              整段描述今天的计划,我会帮你拆成清单并排程
             </span>
+          </div>
+
+          {/* 示例卡片 */}
+          <div
+            className="stagger-child"
+            style={{
+              "--stagger-index": 2,
+              marginTop: 8,
+              padding: "14px 18px",
+              background: "var(--paper-0)",
+              border: "1px solid var(--rule-line)",
+              borderRadius: "var(--radius-md)",
+              boxShadow: "var(--shadow-paper-low)",
+              fontSize: 13,
+              lineHeight: 1.65,
+              color: "var(--ink-600)",
+              maxWidth: 300,
+            } as React.CSSProperties}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                color: "var(--vermilion-600)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                marginBottom: 6,
+              }}
+            >
+              示例
+            </div>
+            上午写周报,下午 3 点开会,晚上健身一小时。
           </div>
         </div>
       )}
@@ -73,19 +128,17 @@ export default function ChatHistory({ messages, loading }: ChatHistoryProps) {
           }}
         >
           <div
-            className="animate-neon-pulse"
             style={{
-              padding: "8px 16px",
-              borderRadius: "14px 14px 14px 4px",
-              background: "rgba(0, 240, 255, 0.08)",
-              border: "1px solid rgba(0, 240, 255, 0.15)",
-              fontSize: 12,
-              color: "var(--cyan-dim)",
-              fontFamily: "var(--font-display)",
-              letterSpacing: "0.05em",
+              borderRadius: "var(--radius-lg)",
+              background: "var(--paper-0)",
+              border: "1px solid var(--rule-line)",
+              padding: "8px 14px",
+              boxShadow: "var(--shadow-paper-low)",
             }}
           >
-            思考中...
+            <div className="typing-dots">
+              <span /><span /><span />
+            </div>
           </div>
         </div>
       )}

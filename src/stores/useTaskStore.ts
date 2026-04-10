@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { emit } from "@tauri-apps/api/event";
 import { getDB } from "@/services/db";
 import type {
   DailyPlan,
@@ -54,6 +55,19 @@ interface TaskStore {
   ) => Promise<void>;
   startSubtask: (subtaskId: number) => Promise<void>;
   completeSubtask: (subtaskId: number) => Promise<void>;
+
+  deleteTask: (taskId: number) => Promise<void>;
+  updateTaskFields: (
+    taskId: number,
+    fields: {
+      name?: string;
+      deadline?: string | null;
+      priority?: number;
+      category?: TaskCategory;
+      estimated_mins?: number;
+    }
+  ) => Promise<void>;
+  clearSubtasks: (taskId: number) => Promise<void>;
 
   addDependency: (taskId: number, dependsOnId: number) => Promise<void>;
   getDependencies: (taskId: number) => Promise<number[]>;
@@ -300,6 +314,81 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       }
       return { subtasks: newSubtasks };
     });
+
+    // REM-002: 发送鼓励动画 + 进度气泡
+    const { subtasks: allSubs } = get();
+    let completed = 0;
+    let total = 0;
+    for (const taskId in allSubs) {
+      for (const st of allSubs[taskId]) {
+        total++;
+        if (st.status === "completed") completed++;
+      }
+    }
+    emit("pet-state", { state: "encourage" });
+    emit("pet-bubble", { text: `${completed}/${total} 已完成！加油！` });
+    setTimeout(() => emit("pet-state", { state: "idle" }), 2500);
+  },
+
+  deleteTask: async (taskId) => {
+    const db = await getDB();
+    await db.execute("DELETE FROM subtasks WHERE task_id = $1", [taskId]);
+    await db.execute("DELETE FROM tasks WHERE id = $1", [taskId]);
+    set((s) => {
+      const newSubtasks = { ...s.subtasks };
+      delete newSubtasks[taskId];
+      return {
+        tasks: s.tasks.filter((t) => t.id !== taskId),
+        subtasks: newSubtasks,
+      };
+    });
+  },
+
+  updateTaskFields: async (taskId, fields) => {
+    const db = await getDB();
+    const sets: string[] = [];
+    const vals: unknown[] = [];
+    let idx = 1;
+    if (fields.name !== undefined) {
+      sets.push(`name = $${idx++}`);
+      vals.push(fields.name);
+    }
+    if (fields.deadline !== undefined) {
+      sets.push(`deadline = $${idx++}`);
+      vals.push(fields.deadline);
+    }
+    if (fields.priority !== undefined) {
+      sets.push(`priority = $${idx++}`);
+      vals.push(fields.priority);
+    }
+    if (fields.category !== undefined) {
+      sets.push(`category = $${idx++}`);
+      vals.push(fields.category);
+    }
+    if (fields.estimated_mins !== undefined) {
+      sets.push(`estimated_mins = $${idx++}`);
+      vals.push(fields.estimated_mins);
+    }
+    if (sets.length > 0) {
+      vals.push(taskId);
+      await db.execute(
+        `UPDATE tasks SET ${sets.join(", ")} WHERE id = $${idx}`,
+        vals
+      );
+      set((s) => ({
+        tasks: s.tasks.map((t) =>
+          t.id === taskId ? { ...t, ...fields } : t
+        ),
+      }));
+    }
+  },
+
+  clearSubtasks: async (taskId) => {
+    const db = await getDB();
+    await db.execute("DELETE FROM subtasks WHERE task_id = $1", [taskId]);
+    set((s) => ({
+      subtasks: { ...s.subtasks, [taskId]: [] },
+    }));
   },
 
   addDependency: async (taskId, dependsOnId) => {

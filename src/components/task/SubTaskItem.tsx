@@ -1,4 +1,5 @@
 import type { SubTask } from "@/types/task";
+import Icon from "@/components/shared/Icon";
 
 interface SubTaskItemProps {
   subtask: SubTask;
@@ -22,15 +23,14 @@ export default function SubTaskItem({
 
   return (
     <div
-      className={isCompleted ? "animate-complete" : undefined}
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 8,
-        padding: "5px 8px",
-        borderRadius: "var(--radius-sm)",
+        gap: 10,
+        padding: "8px 12px",
+        borderRadius: "var(--radius-md)",
         background: isActive
-          ? "rgba(0, 240, 255, 0.06)"
+          ? "var(--vermilion-100)"
           : "transparent",
         opacity: isDone ? 0.5 : 1,
         transition: "var(--transition-fast)",
@@ -39,18 +39,20 @@ export default function SubTaskItem({
       {/* 状态指示点 */}
       <div
         style={{
-          width: 7,
-          height: 7,
-          borderRadius: "50%",
+          width: 8,
+          height: 8,
           flexShrink: 0,
+          borderRadius: 999,
           background: isCompleted
-            ? "var(--neon-green)"
+            ? "var(--moss-600)"
             : isActive
-              ? "var(--cyan-glow)"
+              ? "var(--vermilion-600)"
               : isSkipped
-                ? "var(--text-muted)"
-                : "rgba(0, 240, 255, 0.3)",
-          boxShadow: isActive ? "var(--glow-cyan)" : "none",
+                ? "var(--ink-300)"
+                : "var(--ink-200)",
+          boxShadow: isActive
+            ? "0 0 0 3px var(--vermilion-200)"
+            : "none",
         }}
       />
 
@@ -60,7 +62,7 @@ export default function SubTaskItem({
           className="text-mono"
           style={{
             fontSize: 10,
-            color: "var(--cyan-dim)",
+            color: "var(--text-secondary)",
             flexShrink: 0,
             width: 40,
           }}
@@ -73,7 +75,8 @@ export default function SubTaskItem({
       <span
         style={{
           flex: 1,
-          fontSize: 12,
+          fontSize: 13,
+          lineHeight: 1.45,
           color: isDone ? "var(--text-muted)" : "var(--text-primary)",
           textDecoration: isCompleted ? "line-through" : "none",
           overflow: "hidden",
@@ -87,7 +90,7 @@ export default function SubTaskItem({
       {/* 耗时 */}
       <span
         className="text-mono"
-        style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}
+        style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}
       >
         {subtask.estimated_mins}m
       </span>
@@ -97,28 +100,49 @@ export default function SubTaskItem({
         <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
           {subtask.status === "pending" && (
             <button
+              className="btn btn-icon"
               onClick={() => onStart(subtask.id)}
               title="开始"
-              style={miniBtn("var(--cyan-glow)", "rgba(0, 240, 255, 0.12)")}
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: 4,
+                background: "transparent",
+                color: "var(--ink-700)",
+              }}
             >
-              ▶
+              <Icon name="play" size={10} fill color="currentColor" />
             </button>
           )}
           {isActive && (
             <button
+              className="btn btn-icon"
               onClick={() => onComplete(subtask.id)}
               title="完成"
-              style={miniBtn("var(--neon-green)", "rgba(57, 255, 20, 0.12)")}
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: 4,
+                background: "var(--ink-50)",
+                color: "var(--ink-800)",
+              }}
             >
-              ✓
+              <Icon name="check" size={10} accent color="currentColor" />
             </button>
           )}
           <button
+            className="btn btn-icon"
             onClick={() => onSkip(subtask.id)}
             title="跳过"
-            style={miniBtn("var(--text-muted)", "rgba(74, 80, 104, 0.15)")}
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 4,
+              background: "transparent",
+              color: "var(--ink-400)",
+            }}
           >
-            ✕
+            <Icon name="minus" size={10} color="currentColor" />
           </button>
         </div>
       )}
@@ -126,22 +150,3 @@ export default function SubTaskItem({
   );
 }
 
-function miniBtn(
-  color: string,
-  bg: string
-): React.CSSProperties {
-  return {
-    width: 20,
-    height: 20,
-    border: "none",
-    borderRadius: 4,
-    background: bg,
-    color,
-    fontSize: 10,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    transition: "var(--transition-fast)",
-  };
-}

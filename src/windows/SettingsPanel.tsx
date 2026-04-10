@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useSettingsStore } from "@/stores/useSettingsStore";
+import WindowTitleBar from "@/components/shared/WindowTitleBar";
 import { resetProvider } from "@/services/llm";
 import type { LLMMode } from "@/types/settings";
+import Icon from "@/components/shared/Icon";
 
 export default function SettingsPanel() {
   const { settings, loading, load, update } = useSettingsStore();
@@ -12,9 +13,9 @@ export default function SettingsPanel() {
   const [workEnd, setWorkEnd] = useState("18:00");
   const [breakMins, setBreakMins] = useState(10);
   const [llmMode, setLlmMode] = useState<LLMMode>("api");
-  const [apiUrl, setApiUrl] = useState("https://api.openai.com/v1");
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("gpt-4o-mini");
+  const [apiUrl, setApiUrl] = useState("https://ark.cn-beijing.volces.com/api/coding/v1");
+  const [apiKey, setApiKey] = useState("f634f22e-6059-4430-a3d6-0f4de4a60e8e");
+  const [model, setModel] = useState("doubao-seed-2-0-code-preview-260215");
   const [localModelPath, setLocalModelPath] = useState("");
   const [saved, setSaved] = useState(false);
 
@@ -51,8 +52,6 @@ export default function SettingsPanel() {
     setTimeout(() => setSaved(false), 2000);
   }, [workStart, workEnd, breakMins, llmMode, apiUrl, apiKey, model, localModelPath, update]);
 
-  const handleClose = () => getCurrentWindow().close();
-
   if (loading || !settings) {
     return (
       <div
@@ -82,69 +81,36 @@ export default function SettingsPanel() {
         flexDirection: "column",
       }}
     >
-      {/* 标题栏 */}
-      <div
-        data-tauri-drag-region
-        style={{
-          height: 36,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 12px",
-          borderBottom: "1px solid rgba(0, 240, 255, 0.1)",
-          cursor: "grab",
-          flexShrink: 0,
-        }}
-      >
-        <span
-          className="heading-display"
-          style={{ fontSize: 13, color: "var(--cyan-glow)", letterSpacing: "0.1em" }}
-        >
-          CYBERPET // SETTINGS
-        </span>
-        <button
-          onClick={handleClose}
-          style={{
-            width: 20,
-            height: 20,
-            border: "none",
-            background: "rgba(255, 60, 172, 0.15)",
-            borderRadius: "50%",
-            color: "var(--magenta-glow)",
-            fontSize: 11,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "var(--transition-fast)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(255, 60, 172, 0.35)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "rgba(255, 60, 172, 0.15)";
-          }}
-        >
-          ✕
-        </button>
+      <div className="stagger-child" style={{ "--stagger-index": 0 } as React.CSSProperties}>
+        <WindowTitleBar title="设置" />
       </div>
 
       {/* 设置内容 */}
       <div
+        className="stagger-child"
         style={{
+          "--stagger-index": 1,
           flex: 1,
           overflowY: "auto",
-          padding: "16px 20px",
+          padding: "24px 28px",
           display: "flex",
           flexDirection: "column",
-          gap: 20,
-        }}
+          gap: 28,
+        } as React.CSSProperties}
       >
         {/* 工作时间 */}
-        <Section title="工作时间">
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <Section title="工作时间" subtitle="决定今日排程的起止范围">
+          <div style={{ display: "flex", gap: 14, alignItems: "flex-end" }}>
             <Field label="开始" value={workStart} onChange={setWorkStart} type="time" />
-            <span style={{ color: "var(--text-muted)", fontSize: 12 }}>至</span>
+            <span
+              style={{
+                color: "var(--ink-400)",
+                fontSize: 12,
+                paddingBottom: 12,
+              }}
+            >
+              至
+            </span>
             <Field label="结束" value={workEnd} onChange={setWorkEnd} type="time" />
           </div>
           <Field
@@ -156,8 +122,8 @@ export default function SettingsPanel() {
         </Section>
 
         {/* LLM 配置 */}
-        <Section title="AI 模型">
-          <div style={{ display: "flex", gap: 6 }}>
+        <Section title="AI 模型" subtitle="对话与任务拆解的大语言模型配置">
+          <div style={{ display: "flex", gap: 10 }}>
             <ModeBtn
               active={llmMode === "api"}
               label="API 模式"
@@ -195,31 +161,39 @@ export default function SettingsPanel() {
       {/* 底部保存按钮 */}
       <div
         style={{
-          padding: "12px 20px",
-          borderTop: "1px solid rgba(0, 240, 255, 0.08)",
+          padding: "16px 28px 20px",
+          background: "var(--paper-2)",
+          borderTop: "1px solid var(--rule-line)",
           flexShrink: 0,
         }}
       >
         <button
+          className={`btn ${saved ? "btn-green" : "btn-cyan"}`}
           onClick={handleSave}
           style={{
             width: "100%",
-            padding: "10px",
-            border: "none",
-            borderRadius: "var(--radius-sm)",
-            background: saved
-              ? "rgba(57, 255, 20, 0.15)"
-              : "rgba(0, 240, 255, 0.12)",
-            color: saved ? "var(--neon-green)" : "var(--cyan-glow)",
+            padding: "12px",
             fontSize: 13,
             fontFamily: "var(--font-display)",
             fontWeight: 600,
-            letterSpacing: "0.08em",
-            cursor: "pointer",
-            transition: "var(--transition-normal)",
+            letterSpacing: "0.02em",
           }}
         >
-          {saved ? "✓ 已保存" : "保存设置"}
+          {saved ? (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              <Icon name="check" size="xs" accent color="currentColor" />
+              已保存
+            </span>
+          ) : (
+            "保存设置"
+          )}
         </button>
       </div>
     </div>
@@ -228,33 +202,52 @@ export default function SettingsPanel() {
 
 function Section({
   title,
+  subtitle,
   children,
 }: {
   title: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <div
-        className="heading-display"
-        style={{
-          fontSize: 11,
-          color: "var(--text-secondary)",
-          letterSpacing: "0.08em",
-          marginBottom: 10,
-        }}
-      >
-        {title}
+      <div style={{ marginBottom: 12 }}>
+        <h3
+          style={{
+            fontFamily: "var(--font-display)",
+            fontWeight: 600,
+            fontSize: 16,
+            color: "var(--ink-900)",
+            letterSpacing: "-0.01em",
+            margin: 0,
+            lineHeight: 1.3,
+          }}
+        >
+          {title}
+        </h3>
+        {subtitle && (
+          <p
+            style={{
+              fontSize: 13,
+              color: "var(--ink-500)",
+              margin: "4px 0 0",
+              lineHeight: 1.5,
+            }}
+          >
+            {subtitle}
+          </p>
+        )}
       </div>
       <div
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 10,
-          background: "var(--bg-card)",
-          border: "var(--border-glass)",
-          borderRadius: "var(--radius-md)",
-          padding: 12,
+          gap: 14,
+          background: "var(--paper-0)",
+          border: "1px solid var(--rule-line)",
+          borderRadius: "var(--radius-lg)",
+          padding: "20px 22px",
+          boxShadow: "var(--shadow-paper-low)",
         }}
       >
         {children}
@@ -277,26 +270,25 @@ function Field({
   placeholder?: string;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <label
-        style={{ fontSize: 11, color: "var(--text-muted)" }}
+        style={{
+          fontSize: 11,
+          color: "var(--text-muted)",
+          letterSpacing: "0.04em",
+        }}
       >
         {label}
       </label>
       <input
+        className="input-field"
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         style={{
-          padding: "6px 10px",
-          border: "var(--border-glow)",
-          borderRadius: "var(--radius-sm)",
-          background: "var(--bg-input)",
-          color: "var(--text-primary)",
-          fontSize: 12,
-          fontFamily: "var(--font-body)",
-          outline: "none",
+          padding: "10px 12px",
+          fontSize: 13,
           width: "100%",
         }}
       />
@@ -315,21 +307,14 @@ function ModeBtn({
 }) {
   return (
     <button
+      className={`btn ${active ? "btn-cyan" : "btn-ghost"}`}
       onClick={onClick}
       style={{
         flex: 1,
-        padding: "6px 12px",
-        border: active
-          ? "1px solid rgba(0, 240, 255, 0.3)"
-          : "var(--border-glass)",
-        borderRadius: "var(--radius-sm)",
-        background: active ? "rgba(0, 240, 255, 0.1)" : "transparent",
-        color: active ? "var(--cyan-glow)" : "var(--text-muted)",
+        padding: "10px 14px",
         fontSize: 12,
         fontFamily: "var(--font-display)",
-        fontWeight: 600,
-        cursor: "pointer",
-        transition: "var(--transition-fast)",
+        fontWeight: 500,
       }}
     >
       {label}

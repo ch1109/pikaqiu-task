@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { exit } from "@tauri-apps/plugin-process";
+import Icon, { type IconName } from "@/components/shared/Icon";
 
 interface MenuItem {
   label: string;
-  icon: string;
+  icon: IconName;
   action: () => void;
   danger?: boolean;
 }
@@ -21,29 +23,34 @@ export default function PetContextMenu({ x, y, onClose }: PetContextMenuProps) {
   const items: MenuItem[] = [
     {
       label: "今日计划",
-      icon: "📋",
+      icon: "scroll-text",
       action: () => invoke("create_chat_window"),
     },
     {
       label: "任务面板",
-      icon: "⚡",
+      icon: "list-todo",
       action: () => invoke("create_task_window"),
     },
     {
       label: "专注模式",
-      icon: "🎯",
+      icon: "target",
       action: () => {
         /* Phase 6 实现 */
       },
     },
     {
       label: "设置",
-      icon: "⚙",
+      icon: "settings-2",
       action: () => invoke("create_settings_window"),
     },
     {
+      label: "最小化",
+      icon: "chevron-down",
+      action: () => getCurrentWindow().hide(),
+    },
+    {
       label: "退出",
-      icon: "✕",
+      icon: "log-out",
       action: () => exit(0),
       danger: true,
     },
@@ -74,60 +81,53 @@ export default function PetContextMenu({ x, y, onClose }: PetContextMenuProps) {
         position: "fixed",
         left: x,
         top: y,
-        minWidth: 140,
-        background: "rgba(14, 18, 38, 0.95)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        border: "1px solid rgba(0, 240, 255, 0.15)",
-        borderRadius: 10,
-        padding: "4px 0",
-        boxShadow:
-          "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 1px rgba(0, 240, 255, 0.2)",
+        minWidth: 188,
+        background: "var(--paper-0)",
+        border: "1px solid var(--rule-line)",
+        borderRadius: "var(--radius-md)",
+        padding: "8px 0",
+        boxShadow: "var(--shadow-paper-lift)",
         zIndex: 9999,
       }}
     >
-      {items.map((item) => (
+      {items.map((item, index) => (
         <div key={item.label}>
           {item.danger && (
             <div
               style={{
                 height: 1,
-                background: "rgba(255, 255, 255, 0.06)",
-                margin: "3px 8px",
+                margin: "6px 14px",
+                background: "var(--rule-line)",
               }}
             />
           )}
           <button
+            className={`menu-item stagger-child ${item.danger ? "menu-item--danger" : ""}`}
             onClick={() => {
               item.action();
               onClose();
             }}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              width: "100%",
-              padding: "7px 14px",
-              border: "none",
-              background: "transparent",
-              color: item.danger ? "var(--coral-warn)" : "var(--text-primary)",
-              fontSize: 12,
-              fontFamily: "var(--font-body)",
-              cursor: "pointer",
-              transition: "var(--transition-fast)",
-              textAlign: "left",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = item.danger
-                ? "rgba(255, 107, 107, 0.1)"
-                : "rgba(0, 240, 255, 0.08)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-            }}
+              padding: "11px 20px",
+              fontSize: 13,
+              gap: 12,
+              "--stagger-index": index,
+            } as React.CSSProperties}
           >
-            <span style={{ fontSize: 13, width: 18, textAlign: "center" }}>
-              {item.icon}
+            <span
+              style={{
+                width: 18,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: item.danger ? "var(--seal-red)" : "var(--ink-500)",
+              }}
+            >
+              <Icon
+                name={item.icon}
+                size={14}
+                color={item.danger ? "var(--seal-red)" : "var(--ink-600)"}
+              />
             </span>
             <span>{item.label}</span>
           </button>
