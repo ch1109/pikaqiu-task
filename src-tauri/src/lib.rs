@@ -22,6 +22,7 @@ pub fn run() {
             commands::window::create_chat_window,
             commands::window::create_task_window,
             commands::window::create_settings_window,
+            commands::window::get_pet_cursor_local_pos,
             commands::llm::llm_chat,
             commands::llm::llm_check,
         ])

@@ -25,6 +25,8 @@ export interface Task {
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
+  planned_start_time: string | null;
+  planned_end_time: string | null;
 }
 
 export interface TaskDependency {
@@ -55,7 +57,7 @@ export interface ScheduledBlock {
 }
 
 export interface ScheduleConflict {
-  type: "deadline" | "overflow";
+  type: "deadline" | "overflow" | "anchor_overlap" | "anchor_out_of_work";
   task_id: number;
   message: string;
 }

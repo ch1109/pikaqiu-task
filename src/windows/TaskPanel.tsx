@@ -6,6 +6,7 @@ import TaskList from "@/components/task/TaskList";
 import TaskTimeline from "@/components/task/TaskTimeline";
 import ConflictAlert from "@/components/task/ConflictAlert";
 import DailyReview from "@/components/review/DailyReview";
+import ReminderPanel from "@/components/reminder/ReminderPanel";
 import { useTaskStore } from "@/stores/useTaskStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { scheduleDay } from "@/services/scheduler";
@@ -16,6 +17,7 @@ import Icon from "@/components/shared/Icon";
 const TABS = [
   { key: "timeline", label: "日程", icon: <Icon name="calendar-days" size="sm" /> },
   { key: "tasks", label: "任务", icon: <Icon name="notebook-pen" size="sm" /> },
+  { key: "reminders", label: "提醒", icon: <Icon name="bell-ring" size="sm" /> },
   { key: "review", label: "复盘", icon: <Icon name="book-open-text" size="sm" /> },
 ];
 
@@ -160,10 +162,11 @@ export default function TaskPanel() {
         <TabBar tabs={TABS} activeKey={activeTab} onChange={setActiveTab} />
       </div>
 
-      {/* 冲突提示 */}
-      {activeTab !== "review" && conflictSuggestions.length > 0 && (
-        <ConflictAlert items={conflictSuggestions} />
-      )}
+      {/* 冲突提示：仅在 日程/任务 Tab 显示 */}
+      {(activeTab === "timeline" || activeTab === "tasks") &&
+        conflictSuggestions.length > 0 && (
+          <ConflictAlert items={conflictSuggestions} />
+        )}
 
       {/* 内容区 */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -203,6 +206,8 @@ export default function TaskPanel() {
                 onQuickAdd={handleQuickAdd}
               />
             )}
+
+            {activeTab === "reminders" && <ReminderPanel />}
 
             {activeTab === "review" && (
               <DailyReview planId={currentPlan?.id ?? null} tasks={tasks} />

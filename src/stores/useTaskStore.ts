@@ -65,6 +65,8 @@ interface TaskStore {
       priority?: number;
       category?: TaskCategory;
       estimated_mins?: number;
+      planned_start_time?: string | null;
+      planned_end_time?: string | null;
     }
   ) => Promise<void>;
   clearSubtasks: (taskId: number) => Promise<void>;
@@ -368,6 +370,14 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     if (fields.estimated_mins !== undefined) {
       sets.push(`estimated_mins = $${idx++}`);
       vals.push(fields.estimated_mins);
+    }
+    if (fields.planned_start_time !== undefined) {
+      sets.push(`planned_start_time = $${idx++}`);
+      vals.push(fields.planned_start_time);
+    }
+    if (fields.planned_end_time !== undefined) {
+      sets.push(`planned_end_time = $${idx++}`);
+      vals.push(fields.planned_end_time);
     }
     if (sets.length > 0) {
       vals.push(taskId);

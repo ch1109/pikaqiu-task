@@ -5,6 +5,7 @@ const glowColors: Record<PetState, string> = {
   thinking: "rgba(29, 53, 87, 0.28)",
   encourage: "rgba(230, 57, 70, 0.3)",
   rest: "rgba(125, 91, 166, 0.28)",
+  reminding: "rgba(255, 140, 66, 0.45)",
 };
 
 const stateClass: Record<PetState, string> = {
@@ -12,6 +13,7 @@ const stateClass: Record<PetState, string> = {
   thinking: "pika-state-thinking",
   encourage: "pika-state-encourage",
   rest: "pika-state-rest",
+  reminding: "pika-state-reminding",
 };
 
 interface PetSpriteProps {
@@ -132,6 +134,9 @@ export default function PetSprite({ state, size = 140 }: PetSpriteProps) {
         )}
         {state === "rest" && (
           <path d="M 96,124 Q 100,126.5 104,124" fill="none" stroke="var(--pika-dark)" strokeWidth="1.3" strokeLinecap="round" />
+        )}
+        {state === "reminding" && (
+          <ellipse cx="100" cy="127" rx="5" ry="4" fill="rgba(60,30,30,0.18)" stroke="var(--pika-dark)" strokeWidth="1.8" />
         )}
 
         {/* ZZZ */}

@@ -1,5 +1,5 @@
 import type { SubTask } from "@/types/task";
-import Icon from "@/components/shared/Icon";
+import TaskActionButton from "./TaskActionButton";
 
 interface SubTaskItemProps {
   subtask: SubTask;
@@ -97,53 +97,29 @@ export default function SubTaskItem({
 
       {/* 操作按钮 */}
       {!isDone && (
-        <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {subtask.status === "pending" && (
-            <button
-              className="btn btn-icon"
+            <TaskActionButton
+              icon="play"
+              label="开始"
+              variant="primary"
               onClick={() => onStart(subtask.id)}
-              title="开始"
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 4,
-                background: "transparent",
-                color: "var(--ink-700)",
-              }}
-            >
-              <Icon name="play" size={10} fill color="currentColor" />
-            </button>
+            />
           )}
           {isActive && (
-            <button
-              className="btn btn-icon"
+            <TaskActionButton
+              icon="check"
+              label="完成"
+              variant="primary"
               onClick={() => onComplete(subtask.id)}
-              title="完成"
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 4,
-                background: "var(--ink-50)",
-                color: "var(--ink-800)",
-              }}
-            >
-              <Icon name="check" size={10} accent color="currentColor" />
-            </button>
+            />
           )}
-          <button
-            className="btn btn-icon"
+          <TaskActionButton
+            icon="minus"
+            label="跳过"
+            variant="ghost"
             onClick={() => onSkip(subtask.id)}
-            title="跳过"
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: 4,
-              background: "transparent",
-              color: "var(--ink-400)",
-            }}
-          >
-            <Icon name="minus" size={10} color="currentColor" />
-          </button>
+          />
         </div>
       )}
     </div>

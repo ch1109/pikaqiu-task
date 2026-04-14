@@ -147,4 +147,83 @@ async function runMigrations(database: Database) {
     );
     await database.execute("INSERT INTO _migrations (name) VALUES ('002_volcano_llm')");
   }
+
+  // 迁移 003：自定义定时提醒表（TaskPanel「提醒」Tab）
+  const applied003 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '003_reminders'"
+  );
+  if (applied003.length === 0) {
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS reminders (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        title           TEXT NOT NULL,
+        next_trigger_at TEXT NOT NULL,
+        repeat_kind     TEXT NOT NULL DEFAULT 'none'
+                        CHECK (repeat_kind IN ('none','daily','weekdays')),
+        weekdays        TEXT,
+        enabled         INTEGER NOT NULL DEFAULT 1,
+        last_fired_at   TEXT,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+      )
+    `);
+    await database.execute(
+      "CREATE INDEX IF NOT EXISTS idx_reminders_next ON reminders(next_trigger_at)"
+    );
+    await database.execute("INSERT INTO _migrations (name) VALUES ('003_reminders')");
+  }
+
+  // 迁移 004：扩展 reminders 支持 interval 模式（重建表 —— CHECK 约束无法 ALTER）
+  const applied004 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '004_reminders_interval'"
+  );
+  if (applied004.length === 0) {
+    await database.execute(`
+      CREATE TABLE reminders_new (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        title            TEXT NOT NULL,
+        next_trigger_at  TEXT NOT NULL,
+        repeat_kind      TEXT NOT NULL DEFAULT 'none'
+                         CHECK (repeat_kind IN ('none','daily','weekdays','interval')),
+        weekdays         TEXT,
+        interval_minutes INTEGER,
+        window_start     TEXT,
+        window_end       TEXT,
+        enabled          INTEGER NOT NULL DEFAULT 1,
+        last_fired_at    TEXT,
+        created_at       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        updated_at       TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+      )
+    `);
+    await database.execute(`
+      INSERT INTO reminders_new
+        (id, title, next_trigger_at, repeat_kind, weekdays, enabled, last_fired_at, created_at, updated_at)
+      SELECT id, title, next_trigger_at, repeat_kind, weekdays, enabled, last_fired_at, created_at, updated_at
+      FROM reminders
+    `);
+    await database.execute("DROP TABLE reminders");
+    await database.execute("ALTER TABLE reminders_new RENAME TO reminders");
+    await database.execute(
+      "CREATE INDEX IF NOT EXISTS idx_reminders_next ON reminders(next_trigger_at)"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('004_reminders_interval')"
+    );
+  }
+
+  // 迁移 005：任务时间锚点（可选 HH:mm 起止，空表示浮动）
+  const applied005 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '005_task_planned_time'"
+  );
+  if (applied005.length === 0) {
+    await database.execute(
+      "ALTER TABLE tasks ADD COLUMN planned_start_time TEXT"
+    );
+    await database.execute(
+      "ALTER TABLE tasks ADD COLUMN planned_end_time TEXT"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('005_task_planned_time')"
+    );
+  }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Task, TaskCategory } from "@/types/task";
 import Icon from "@/components/shared/Icon";
 import {
@@ -17,6 +17,8 @@ interface TaskDetailsPopoverProps {
     category?: TaskCategory;
     deadline?: string | null;
     estimated_mins?: number;
+    planned_start_time?: string | null;
+    planned_end_time?: string | null;
   }) => void;
   onDecompose: () => void;
   onDelete: () => void;
@@ -36,6 +38,38 @@ export default function TaskDetailsPopover({
   onClose,
 }: TaskDetailsPopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [draftStart, setDraftStart] = useState(task.planned_start_time ?? "");
+  const [draftEnd, setDraftEnd] = useState(task.planned_end_time ?? "");
+  const [timeHint, setTimeHint] = useState<string | null>(null);
+
+  const commitAnchor = (nextStart: string, nextEnd: string) => {
+    const hasAny = !!(nextStart || nextEnd);
+    if (!hasAny) {
+      setTimeHint(null);
+      onUpdate({ planned_start_time: null, planned_end_time: null });
+      return;
+    }
+    if (!nextStart || !nextEnd) {
+      setTimeHint("请同时填写开始与结束时间，或清空两者");
+      return;
+    }
+    if (nextEnd <= nextStart) {
+      setTimeHint("结束时间必须晚于开始时间");
+      return;
+    }
+    setTimeHint(null);
+    onUpdate({
+      planned_start_time: nextStart,
+      planned_end_time: nextEnd,
+    });
+  };
+
+  const clearAnchor = () => {
+    setDraftStart("");
+    setDraftEnd("");
+    setTimeHint(null);
+    onUpdate({ planned_start_time: null, planned_end_time: null });
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -240,6 +274,83 @@ export default function TaskDetailsPopover({
             </button>
           )}
         </div>
+      </Row>
+
+      {/* 时间锚点（可选） */}
+      <Row label="时间锚点（可选）">
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <input
+            type="time"
+            value={draftStart}
+            onChange={(e) => {
+              setDraftStart(e.target.value);
+              commitAnchor(e.target.value, draftEnd);
+            }}
+            className="input-field"
+            style={{
+              width: 96,
+              padding: "6px 10px",
+              fontSize: 12,
+              fontFamily: "var(--font-mono)",
+              colorScheme: "light",
+            }}
+          />
+          <span style={{ color: "var(--ink-400)", fontSize: 12 }}>—</span>
+          <input
+            type="time"
+            value={draftEnd}
+            onChange={(e) => {
+              setDraftEnd(e.target.value);
+              commitAnchor(draftStart, e.target.value);
+            }}
+            className="input-field"
+            style={{
+              width: 96,
+              padding: "6px 10px",
+              fontSize: 12,
+              fontFamily: "var(--font-mono)",
+              colorScheme: "light",
+            }}
+          />
+          {(draftStart || draftEnd) && (
+            <button
+              className="btn btn-ghost"
+              onClick={clearAnchor}
+              style={{
+                padding: "6px 8px",
+                borderRadius: "var(--radius-sm)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              title="清除时间锚点"
+            >
+              <Icon name="x" size="xs" color="var(--ink-400)" />
+            </button>
+          )}
+        </div>
+        {timeHint && (
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--seal-red)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 2,
+            }}
+          >
+            <Icon name="alert-triangle" size="xs" color="var(--seal-red)" />
+            {timeHint}
+          </div>
+        )}
       </Row>
 
       {/* AI 拆解 + 删除 */}

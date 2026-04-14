@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Task, SubTask, ScheduledBlock, TaskCategory } from "@/types/task";
 import SubTaskItem from "./SubTaskItem";
 import TaskDetailsPopover from "./TaskDetailsPopover";
+import TaskActionButton from "./TaskActionButton";
 import { priorityColors, categoryLabels } from "./taskMeta";
 import { useTaskDecompose } from "@/hooks/useTaskDecompose";
 import Icon from "@/components/shared/Icon";
@@ -22,6 +23,8 @@ interface TaskCardProps {
       category?: TaskCategory;
       deadline?: string | null;
       estimated_mins?: number;
+      planned_start_time?: string | null;
+      planned_end_time?: string | null;
     }
   ) => void;
   onStartSubtask: (id: number) => void;
@@ -245,6 +248,34 @@ export default function TaskCard({
                 </span>
               </>
             )}
+            {task.planned_start_time && task.planned_end_time && (
+              <>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 1,
+                    height: 10,
+                    background: "var(--rule-line)",
+                    display: "inline-block",
+                  }}
+                />
+                <span
+                  className="text-mono"
+                  style={{
+                    fontSize: 11,
+                    color: "var(--accent-primary)",
+                    letterSpacing: "-0.01em",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 3,
+                  }}
+                  title="时间锚点"
+                >
+                  <Icon name="clock" size="xs" color="var(--accent-primary)" />
+                  {task.planned_start_time}–{task.planned_end_time}
+                </span>
+              </>
+            )}
             <span
               aria-hidden="true"
               style={{
@@ -331,54 +362,20 @@ export default function TaskCard({
         >
           {/* 开始/完成 */}
           {!isCompleted && task.status === "pending" && (
-            <button
-              className="btn btn-icon"
+            <TaskActionButton
+              icon="play"
+              label="开始"
+              variant="primary"
               onClick={() => onStartTask(task.id)}
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: "var(--radius-sm)",
-                background: "var(--ink-50)",
-                color: "var(--ink-700)",
-                transition: "background 180ms ease, color 180ms ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--vermilion-200)";
-                e.currentTarget.style.color = "var(--vermilion-600)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--ink-50)";
-                e.currentTarget.style.color = "var(--ink-700)";
-              }}
-              title="开始任务"
-            >
-              <Icon name="play" size="xs" fill color="currentColor" />
-            </button>
+            />
           )}
           {!isCompleted && isActive && (
-            <button
-              className="btn btn-icon"
+            <TaskActionButton
+              icon="check"
+              label="完成"
+              variant="primary"
               onClick={() => onCompleteTask(task.id)}
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: "var(--radius-sm)",
-                background: "var(--ink-50)",
-                color: "var(--ink-800)",
-                transition: "background 180ms ease, color 180ms ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--moss-200)";
-                e.currentTarget.style.color = "var(--moss-600)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--ink-50)";
-                e.currentTarget.style.color = "var(--ink-800)";
-              }}
-              title="完成任务"
-            >
-              <Icon name="check" size="xs" accent color="currentColor" />
-            </button>
+            />
           )}
 
           {/* 详情按钮 */}
