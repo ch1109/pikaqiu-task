@@ -73,6 +73,18 @@ interface TaskStore {
 
   addDependency: (taskId: number, dependsOnId: number) => Promise<void>;
   getDependencies: (taskId: number) => Promise<number[]>;
+
+  loadHistory: (
+    days: number
+  ) => Promise<Array<{ date: string; completed: number }>>;
+
+  /**
+   * 按本地日期（YYYY-MM-DD）拉取当日所有已完成任务明细 + 对应子任务。
+   * 不进 zustand state：复盘回看场景只读，避免污染 tasks/subtasks 的"今日"语义。
+   */
+  loadCompletedByDate: (
+    date: string
+  ) => Promise<{ tasks: Task[]; subtasksByTask: Record<number, SubTask[]> }>;
 }
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
@@ -170,6 +182,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       tasks: [...s.tasks, task],
       subtasks: { ...s.subtasks, [task.id]: [] },
     }));
+    emit("tasks-changed");
     return task;
   },
 
@@ -182,6 +195,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set((s) => ({
       tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, status } : t)),
     }));
+    emit("tasks-changed");
   },
 
   startTask: async (taskId) => {
@@ -196,6 +210,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         t.id === taskId ? { ...t, status: "active" as const, started_at: now } : t
       ),
     }));
+    emit("tasks-changed");
   },
 
   completeTask: async (taskId) => {
@@ -217,6 +232,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           : t
       ),
     }));
+    emit("tasks-changed");
   },
 
   addSubtask: async (taskId, subtaskData) => {
@@ -317,7 +333,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       return { subtasks: newSubtasks };
     });
 
-    // REM-002: 发送鼓励动画 + 进度气泡
+    // 根据完成度选择桌宠形态：全部完成 → 庆祝；否则 → 鼓励。
+    // 自动回 idle 由 usePetStore 的 TTL 机制处理（celebrating 4s / encourage 2.5s）
     const { subtasks: allSubs } = get();
     let completed = 0;
     let total = 0;
@@ -327,9 +344,14 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         if (st.status === "completed") completed++;
       }
     }
-    emit("pet-state", { state: "encourage" });
-    emit("pet-bubble", { text: `${completed}/${total} 已完成！加油！` });
-    setTimeout(() => emit("pet-state", { state: "idle" }), 2500);
+    const allDone = total > 0 && completed === total;
+    if (allDone) {
+      emit("pet-state", { state: "celebrating" });
+      emit("pet-bubble", { text: `🎉 今天全部完成！辛苦啦！` });
+    } else {
+      emit("pet-state", { state: "encourage" });
+      emit("pet-bubble", { text: `${completed}/${total} 已完成！加油！` });
+    }
   },
 
   deleteTask: async (taskId) => {
@@ -344,6 +366,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         subtasks: newSubtasks,
       };
     });
+    emit("tasks-changed");
   },
 
   updateTaskFields: async (taskId, fields) => {
@@ -390,6 +413,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           t.id === taskId ? { ...t, ...fields } : t
         ),
       }));
+      // 时间锚点等字段变更可能影响 alarm 排程，广播让 PetWindow 重排
+      emit("tasks-changed");
     }
   },
 
@@ -416,5 +441,54 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       [taskId]
     );
     return rows.map((r) => r.depends_on_id);
+  },
+
+  loadCompletedByDate: async (date) => {
+    const db = await getDB();
+    const tasks = await db.select<Task[]>(
+      `SELECT * FROM tasks
+       WHERE status = 'completed'
+         AND completed_at IS NOT NULL
+         AND DATE(completed_at) = $1
+       ORDER BY completed_at DESC`,
+      [date]
+    );
+    if (tasks.length === 0) {
+      return { tasks: [], subtasksByTask: {} };
+    }
+    const ids = tasks.map((t) => t.id);
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
+    const subs = await db.select<SubTask[]>(
+      `SELECT * FROM subtasks WHERE task_id IN (${placeholders}) ORDER BY sort_order ASC, id ASC`,
+      ids
+    );
+    const subtasksByTask: Record<number, SubTask[]> = {};
+    for (const s of subs) {
+      (subtasksByTask[s.task_id] ||= []).push(s);
+    }
+    return { tasks, subtasksByTask };
+  },
+
+  loadHistory: async (days) => {
+    const db = await getDB();
+    const rows = await db.select<{ date: string; completed: number }[]>(
+      `SELECT DATE(completed_at) AS date, COUNT(*) AS completed
+       FROM tasks
+       WHERE status = 'completed' AND completed_at IS NOT NULL
+         AND DATE(completed_at) >= DATE('now','localtime',$1)
+       GROUP BY DATE(completed_at)
+       ORDER BY date DESC`,
+      [`-${days - 1} days`]
+    );
+
+    // 补齐缺失日期为 0，保证图表连续
+    const map = new Map(rows.map((r) => [r.date, Number(r.completed)]));
+    const today = dayjs();
+    const filled: Array<{ date: string; completed: number }> = [];
+    for (let i = 0; i < days; i++) {
+      const d = today.subtract(i, "day").format("YYYY-MM-DD");
+      filled.push({ date: d, completed: map.get(d) ?? 0 });
+    }
+    return filled;
   },
 }));

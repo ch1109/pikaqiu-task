@@ -1,17 +1,41 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import PetSprite from "@/components/pet/PetSprite";
 import PetBubble from "@/components/pet/PetBubble";
 import PetContextMenu from "@/components/pet/PetContextMenu";
 import { usePetStore } from "@/stores/usePetStore";
 import { useReminderStore } from "@/stores/useReminderStore";
+import { useTaskStore } from "@/stores/useTaskStore";
 import {
   setupCustomReminders,
   clearCustomReminders,
 } from "@/services/customReminder";
-import type { PetState } from "@/types/pet";
+import {
+  setupTaskAlarms,
+  clearTaskAlarms,
+} from "@/services/taskAlarm";
+import type { BubblePayload } from "@/types/bubble";
+import type { IdleAction, PetState } from "@/types/pet";
+
+const IDLE_ACTIONS: IdleAction[] = [
+  "stretch",
+  "yawn",
+  "hat",
+  "mirror",
+  "peek",
+  "waving",
+  "sparkle",
+  "dance",
+];
+
+/** 待机小动作随机间隔：90~180 秒（稀疏节奏） */
+const IDLE_ACTION_MIN_MS = 90_000;
+const IDLE_ACTION_MAX_MS = 180_000;
+
+/** 单击延迟：给 dblclick 让路，避免双击也被当作单击触发 curious */
+const SINGLE_CLICK_DELAY_MS = 260;
 
 /** 桌宠本体尺寸 */
 const PET_SIZE = 140;
@@ -24,21 +48,32 @@ const MENU_MARGIN = 6;
 const ACK_TIMEOUT_MS = 3 * 60 * 1000;
 const SNOOZE_MINUTES = 5;
 
-interface ReminderBubblePayload {
-  text: string;
-  reminderId?: number;
-  requireAck?: boolean;
-}
+/** "稍后 5 分钟"的临时重排使用的 Map：taskId → timer */
+const TASK_SNOOZE_MINUTES = 5;
 
 export default function PetWindow() {
-  const { state, bubbleText, bubbleActions, showBubble, showActionBubble, hideBubble, setState } =
-    usePetStore();
+  const taskSnoozeTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(
+    new Map()
+  );
+
+  const {
+    state,
+    idleAction,
+    bubbleText,
+    bubbleActions,
+    showBubble,
+    showActionBubble,
+    hideBubble,
+    setState,
+    triggerIdleAction,
+  } = usePetStore();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<{ x: number; y: number } | null>(null);
   menuRef.current = menu;
 
   const bubbleWrapRef = useRef<HTMLDivElement | null>(null);
   const ackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const singleClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearAckTimer = useCallback(() => {
     if (ackTimerRef.current) {
@@ -47,10 +82,30 @@ export default function PetWindow() {
     }
   }, []);
 
+  const clearSingleClickTimer = useCallback(() => {
+    if (singleClickTimerRef.current) {
+      clearTimeout(singleClickTimerRef.current);
+      singleClickTimerRef.current = null;
+    }
+  }, []);
+
+  const handleClick = useCallback(() => {
+    // 等待 260ms，若期间未触发 dblclick，则视为真正单击 → 好奇歪头
+    clearSingleClickTimer();
+    singleClickTimerRef.current = setTimeout(() => {
+      singleClickTimerRef.current = null;
+      // 仅当当前处于 idle 时才抢占为 curious；其他形态（提醒/专注等）尊重原有交互
+      if (usePetStore.getState().state === "idle") {
+        setState("curious");
+      }
+    }, SINGLE_CLICK_DELAY_MS);
+  }, [clearSingleClickTimer, setState]);
+
   const handleDoubleClick = useCallback(async () => {
+    clearSingleClickTimer();
     showBubble("正在打开对话...", 2000);
     await invoke("create_chat_window");
-  }, [showBubble]);
+  }, [clearSingleClickTimer, showBubble]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -76,51 +131,123 @@ export default function PetWindow() {
       setState(event.payload.state);
     });
 
-    // 提醒气泡：requireAck 走按钮分支；普通气泡 3 秒自动消失
-    const unlistenBubble = listen<ReminderBubblePayload>(
-      "pet-bubble",
-      (event) => {
-        const { text, reminderId, requireAck } = event.payload;
+    // 气泡分发：reminder（requireAck）、task-start / task-end、普通文本
+    const unlistenBubble = listen<BubblePayload>("pet-bubble", (event) => {
+      const p = event.payload;
+      const dismissAndReset = () => {
+        clearAckTimer();
+        hideBubble();
+        setState("idle");
+      };
 
-        if (requireAck && reminderId != null) {
-          clearAckTimer();
-          const rid = reminderId;
-          const dismissAndReset = () => {
-            clearAckTimer();
-            hideBubble();
-            setState("idle");
-          };
+      if (p.kind === "task-start") {
+        const tid = p.taskId;
+        const taskName = (() => {
+          const t = useTaskStore.getState().tasks.find((x) => x.id === tid);
+          return t?.name ?? "";
+        })();
 
-          showActionBubble(text, [
-            {
-              id: "ack",
-              label: "看到了",
-              variant: "primary",
-              onClick: () => {
-                useReminderStore.getState().advance(rid);
-                dismissAndReset();
-              },
+        showActionBubble(p.text, [
+          {
+            id: "start",
+            label: "现在开始",
+            variant: "primary",
+            onClick: async () => {
+              await useTaskStore.getState().startTask(tid);
+              dismissAndReset();
             },
-            {
-              id: "snooze",
-              label: "稍后提醒",
-              variant: "ghost",
-              onClick: () => {
-                useReminderStore.getState().snooze(rid, SNOOZE_MINUTES);
-                dismissAndReset();
-              },
+          },
+          {
+            id: "snooze",
+            label: "稍后 5 分钟",
+            variant: "ghost",
+            onClick: () => {
+              const prev = taskSnoozeTimersRef.current.get(tid);
+              if (prev) clearTimeout(prev);
+              const timer = setTimeout(() => {
+                taskSnoozeTimersRef.current.delete(tid);
+                const latest = useTaskStore
+                  .getState()
+                  .tasks.find((x) => x.id === tid);
+                if (latest && latest.status === "pending") {
+                  emit("pet-bubble", {
+                    kind: "task-start",
+                    text: `该开始「${latest.name || taskName}」了`,
+                    taskId: tid,
+                  });
+                  emit("pet-state", { state: "reminding" });
+                }
+              }, TASK_SNOOZE_MINUTES * 60 * 1000);
+              taskSnoozeTimersRef.current.set(tid, timer);
+              dismissAndReset();
             },
-          ]);
-
-          ackTimerRef.current = setTimeout(() => {
-            useReminderStore.getState().snooze(rid, SNOOZE_MINUTES);
-            dismissAndReset();
-          }, ACK_TIMEOUT_MS);
-        } else {
-          showBubble(text, 3000);
-        }
+          },
+        ]);
+        return;
       }
-    );
+
+      if (p.kind === "task-end") {
+        const tid = p.taskId;
+        showActionBubble(p.text, [
+          {
+            id: "done",
+            label: "已完成",
+            variant: "primary",
+            onClick: async () => {
+              await useTaskStore.getState().completeTask(tid);
+              dismissAndReset();
+            },
+          },
+          {
+            id: "not-yet",
+            label: "还没完成",
+            variant: "ghost",
+            onClick: () => {
+              // 保留为未完成态（isOvertime 由派生计算渲染琥珀色标记）。
+              // 保留 dedup key，避免 watchdog 周期性 refresh 再次弹窗骚扰；
+              // 真正允许再次提醒的动作是"顺延时间"——那里会 clearAlarmDedup。
+              dismissAndReset();
+            },
+          },
+        ]);
+        return;
+      }
+
+      // 兼容老的 reminder / 纯文本气泡
+      const { text, reminderId, requireAck } = p;
+      if (requireAck && reminderId != null) {
+        clearAckTimer();
+        const rid = reminderId;
+
+        showActionBubble(text, [
+          {
+            id: "ack",
+            label: "看到了",
+            variant: "primary",
+            onClick: () => {
+              useReminderStore.getState().advance(rid);
+              dismissAndReset();
+            },
+          },
+          {
+            id: "snooze",
+            label: "稍后提醒",
+            variant: "ghost",
+            onClick: () => {
+              useReminderStore.getState().snooze(rid, SNOOZE_MINUTES);
+              dismissAndReset();
+            },
+          },
+        ]);
+
+        ackTimerRef.current = setTimeout(() => {
+          useReminderStore.getState().snooze(rid, SNOOZE_MINUTES);
+          dismissAndReset();
+        }, ACK_TIMEOUT_MS);
+      } else {
+        showBubble(text, 3000);
+      }
+    });
 
     return () => {
       clearAckTimer();
@@ -183,6 +310,60 @@ export default function PetWindow() {
     };
   }, []);
 
+  // 待机小动作调度：90~180s 随机间隔，仅在 idle 且无气泡时触发
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleNext = () => {
+      const delay =
+        IDLE_ACTION_MIN_MS +
+        Math.random() * (IDLE_ACTION_MAX_MS - IDLE_ACTION_MIN_MS);
+      timer = setTimeout(() => {
+        const { state: s, bubbleText: b, idleAction: cur } =
+          usePetStore.getState();
+        // 非 idle、有气泡、或正在播放上一动作时跳过本轮，仍排下次
+        if (s === "idle" && !b && !cur) {
+          const pick =
+            IDLE_ACTIONS[Math.floor(Math.random() * IDLE_ACTIONS.length)];
+          triggerIdleAction(pick);
+        }
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [triggerIdleAction]);
+
+  // 组件卸载时清理单击延迟定时器
+  useEffect(() => {
+    return () => clearSingleClickTimer();
+  }, [clearSingleClickTimer]);
+
+  // 任务时间锚点闹钟：PetWindow 独立 zustand 实例，需主动 loadToday 取最新 tasks
+  useEffect(() => {
+    const snoozeTimers = taskSnoozeTimersRef.current;
+    const refresh = async () => {
+      await useTaskStore.getState().loadToday();
+      setupTaskAlarms(useTaskStore.getState().tasks);
+    };
+
+    refresh();
+
+    const watchdog = setInterval(refresh, 60 * 60 * 1000);
+    const unlisten = listen("tasks-changed", () => refresh());
+
+    return () => {
+      clearInterval(watchdog);
+      clearTaskAlarms();
+      for (const t of snoozeTimers.values()) clearTimeout(t);
+      snoozeTimers.clear();
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   // 自定义定时提醒：PetWindow 是主窗口生命周期≈App，在此挂调度器更稳
   useEffect(() => {
     const { load } = useReminderStore.getState();
@@ -239,6 +420,7 @@ export default function PetWindow() {
       {/* 桌宠本体：绝对居中，独占拖拽与事件捕获 */}
       <div
         data-tauri-drag-region
+        onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
         style={{
@@ -252,7 +434,7 @@ export default function PetWindow() {
           pointerEvents: "auto",
         }}
       >
-        <PetSprite state={state} size={PET_SIZE} />
+        <PetSprite state={state} idleAction={idleAction} size={PET_SIZE} />
       </div>
 
       {/* 右键菜单：独立 pointerEvents: auto 的覆盖层 */}

@@ -276,7 +276,7 @@ export default function ChatPanel() {
 
         await emit("pet-state", { state: "encourage" });
         await emit("tasks-updated", {});
-        setTimeout(() => emit("pet-state", { state: "idle" }), 2000);
+        // idle 回归由 usePetStore TTL 自动处理（encourage=2500ms）
       } catch (err) {
         const errMsg =
           err instanceof Error ? err.message : "发生了未知错误";

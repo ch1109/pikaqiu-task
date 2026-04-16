@@ -19,11 +19,14 @@ interface TaskListProps {
       priority?: number;
       estimated_mins?: number;
       category?: Task["category"];
+      planned_start_time?: string | null;
+      planned_end_time?: string | null;
     }
   ) => void;
   onStartSubtask: (id: number) => void;
   onCompleteSubtask: (id: number) => void;
   onSkipSubtask: (id: number) => void;
+  onAddSubtask: (taskId: number, name: string) => void | Promise<void>;
   onQuickAdd: (name: string) => void | Promise<void>;
 }
 
@@ -39,6 +42,7 @@ export default function TaskList({
   onStartSubtask,
   onCompleteSubtask,
   onSkipSubtask,
+  onAddSubtask,
   onQuickAdd,
 }: TaskListProps) {
   // 为每个任务整理其子任务的排程
@@ -51,21 +55,23 @@ export default function TaskList({
     taskScheduleMap.get(taskId)!.push(block);
   }
 
-  const isEmpty = tasks.length === 0;
+  // 已完成任务自动归档，仅展示未完成项
+  const visibleTasks = tasks.filter((t) => t.status !== "completed");
+  const isEmpty = visibleTasks.length === 0;
 
   return (
     <div
       style={{
         flex: 1,
         overflowY: "auto",
-        padding: "22px 24px 28px",
+        padding: "18px 20px 24px",
         display: "flex",
         flexDirection: "column",
-        gap: 16,
+        gap: 12,
       }}
     >
       {/* 章节刊头 */}
-      <SectionMasthead variant="today" count={tasks.length || undefined} />
+      <SectionMasthead variant="today" count={visibleTasks.length || undefined} />
 
       {/* 顶部快速添加 */}
       <QuickAddInput onAdd={onQuickAdd} autoFocus={isEmpty} />
@@ -120,7 +126,7 @@ export default function TaskList({
       )}
 
       {/* 任务卡片 */}
-      {tasks.map((task, i) => (
+      {visibleTasks.map((task, i) => (
         <TaskCard
           key={task.id}
           task={task}
@@ -135,6 +141,7 @@ export default function TaskList({
           onStartSubtask={onStartSubtask}
           onCompleteSubtask={onCompleteSubtask}
           onSkipSubtask={onSkipSubtask}
+          onAddSubtask={onAddSubtask}
         />
       ))}
     </div>

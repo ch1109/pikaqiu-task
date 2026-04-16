@@ -110,7 +110,7 @@ export default function SubTaskItem({
             <TaskActionButton
               icon="check"
               label="完成"
-              variant="primary"
+              variant="success"
               onClick={() => onComplete(subtask.id)}
             />
           )}

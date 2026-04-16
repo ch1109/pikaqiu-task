@@ -43,6 +43,7 @@ export default function TaskPanel() {
     updateSubtaskStatus,
     createPlan,
     addTask,
+    addSubtask,
     deleteTask,
     updateTaskFields,
   } = useTaskStore();
@@ -53,10 +54,16 @@ export default function TaskPanel() {
     loadSettings();
   }, [loadToday, loadSettings]);
 
-  // 监听 tasks-updated 事件刷新
+  // 监听跨窗口任务变更事件：
+  // - "tasks-updated"：ChatPanel 创建任务后广播
+  // - "tasks-changed"：useTaskStore 所有 CRUD + PetWindow 气泡按钮触发
   useEffect(() => {
-    const unlisten = listen("tasks-updated", () => loadToday());
-    return () => { unlisten.then((fn) => fn()); };
+    const u1 = listen("tasks-updated", () => loadToday());
+    const u2 = listen("tasks-changed", () => loadToday());
+    return () => {
+      u1.then((fn) => fn());
+      u2.then((fn) => fn());
+    };
   }, [loadToday]);
 
   // 监听超时提醒
@@ -133,6 +140,18 @@ export default function TaskPanel() {
     [updateTaskFields]
   );
 
+  const handleAddSubtask = useCallback(
+    async (taskId: number, name: string) => {
+      const existing = useTaskStore.getState().subtasks[taskId] ?? [];
+      await addSubtask(taskId, {
+        name,
+        estimated_mins: 15,
+        sort_order: existing.length,
+      });
+    },
+    [addSubtask]
+  );
+
   const handleUpdateTaskFields = useCallback(
     async (
       id: number,
@@ -203,6 +222,7 @@ export default function TaskPanel() {
                 onStartSubtask={handleStartSubtask}
                 onCompleteSubtask={handleCompleteSubtask}
                 onSkipSubtask={handleSkipSubtask}
+                onAddSubtask={handleAddSubtask}
                 onQuickAdd={handleQuickAdd}
               />
             )}

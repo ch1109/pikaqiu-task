@@ -1,22 +1,65 @@
-import { useState, useEffect, useMemo } from "react";
-import type { Task } from "@/types/task";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import dayjs from "dayjs";
+import type { Task, SubTask } from "@/types/task";
 import ProgressRing from "@/components/shared/ProgressRing";
 import SectionMasthead from "@/components/shared/SectionMasthead";
+import Icon from "@/components/shared/Icon";
+import { categoryLabels } from "@/components/task/taskMeta";
+import TaskDetailsPopover from "@/components/task/TaskDetailsPopover";
 import { generateReview, type DailyReviewData } from "@/services/review";
+import { useTaskStore } from "@/stores/useTaskStore";
 
 interface DailyReviewProps {
   planId: number | null;
   tasks: Task[];
 }
 
+type HistoryRow = { date: string; completed: number };
+const HISTORY_WINDOWS = [14, 30, 90, 180] as const;
+type HistoryDays = (typeof HISTORY_WINDOWS)[number];
+
 export default function DailyReview({ planId, tasks }: DailyReviewProps) {
   const [review, setReview] = useState<DailyReviewData | null>(null);
+  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [historyDays, setHistoryDays] = useState<HistoryDays>(14);
+  const loadHistory = useTaskStore((s) => s.loadHistory);
+  const loadCompletedByDate = useTaskStore((s) => s.loadCompletedByDate);
+  const todaySubtasks = useTaskStore((s) => s.subtasks);
+
+  // 展开的某一天历史（单日）
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [expandedData, setExpandedData] = useState<{
+    tasks: Task[];
+    subtasksByTask: Record<number, SubTask[]>;
+  } | null>(null);
+  const [expandedLoading, setExpandedLoading] = useState(false);
+
+  // 详情 Popover 状态
+  const [openTask, setOpenTask] = useState<Task | null>(null);
+  const [openSubtasks, setOpenSubtasks] = useState<SubTask[]>([]);
+  const anchorMap = useRef<Map<string, HTMLElement>>(new Map());
+  const openAnchorRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (planId && tasks.length > 0) {
       generateReview(planId).then(setReview);
     }
   }, [planId, tasks]);
+
+  useEffect(() => {
+    loadHistory(historyDays).then(setHistory);
+  }, [loadHistory, tasks, historyDays]);
+
+  // 历史窗口切换后重置展开态，避免展示与选中日期错位
+  useEffect(() => {
+    setExpandedDate(null);
+    setExpandedData(null);
+  }, [historyDays]);
+
+  // 展开日期变化时关闭可能挂起的历史行 Popover，避免 anchor 失效后浮层错位
+  useEffect(() => {
+    setOpenTask(null);
+  }, [expandedDate]);
 
   const stats = useMemo(() => {
     if (!review) return null;
@@ -29,7 +72,18 @@ export default function DailyReview({ planId, tasks }: DailyReviewProps) {
     };
   }, [review]);
 
-  // 用于柱状图的任务数据（有实际耗时的任务）
+  // 今日完成清单：所有 completed 任务（含未点过"开始"直接完成的）
+  const todayCompleted = useMemo(() => {
+    return tasks
+      .filter((t) => t.status === "completed")
+      .slice()
+      .sort((a, b) => {
+        const ta = a.completed_at ?? "";
+        const tb = b.completed_at ?? "";
+        return ta.localeCompare(tb);
+      });
+  }, [tasks]);
+
   const barData = useMemo(() => {
     return tasks
       .filter((t) => t.status === "completed" && t.actual_mins)
@@ -41,35 +95,44 @@ export default function DailyReview({ planId, tasks }: DailyReviewProps) {
       }));
   }, [tasks]);
 
-  if (!stats || tasks.length === 0) {
-    return (
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-start",
-          justifyContent: "flex-start",
-          gap: 20,
-          padding: "26px 28px 32px",
-        }}
-      >
-        <SectionMasthead variant="review" subtitle="今天还没有数据" />
-        <div
-          style={{
-            maxWidth: 260,
-            fontSize: 14,
-            lineHeight: 1.65,
-            color: "var(--ink-500)",
-          }}
-        >
-          完成今天的任务后,这里会出现一份完成度报告。
-        </div>
-      </div>
-    );
-  }
+  const hasToday = !!stats && tasks.length > 0;
+  const hasHistory = history.some((h) => h.completed > 0);
+  const isHit = !!stats && stats.percent >= 100;
+  const historyMax = useMemo(
+    () => Math.max(1, ...history.map((h) => h.completed)),
+    [history]
+  );
 
-  const isHit = stats.percent >= 100;
+  const handleOpenDetails = useCallback(
+    (task: Task, subs: SubTask[], anchorKey: string) => {
+      const el = anchorMap.current.get(anchorKey);
+      if (!el) return;
+      openAnchorRef.current = el;
+      setOpenSubtasks(subs);
+      setOpenTask(task);
+    },
+    []
+  );
+
+  const handleToggleDate = useCallback(
+    async (date: string) => {
+      if (expandedDate === date) {
+        setExpandedDate(null);
+        setExpandedData(null);
+        return;
+      }
+      setExpandedDate(date);
+      setExpandedData(null);
+      setExpandedLoading(true);
+      try {
+        const data = await loadCompletedByDate(date);
+        setExpandedData(data);
+      } finally {
+        setExpandedLoading(false);
+      }
+    },
+    [expandedDate, loadCompletedByDate]
+  );
 
   return (
     <div
@@ -86,11 +149,28 @@ export default function DailyReview({ planId, tasks }: DailyReviewProps) {
       <SectionMasthead
         variant="review"
         subtitle={
-          stats.percent >= 100
-            ? "圆满完成了今天的全部任务"
-            : "今天走过一半,剩下的明天继续"
+          !hasToday
+            ? "今天还没有数据"
+            : isHit
+              ? "圆满完成了今天的全部任务"
+              : "今天走过一半,剩下的明天继续"
         }
       />
+
+      {!hasToday && (
+        <div
+          style={{
+            maxWidth: 260,
+            fontSize: 14,
+            lineHeight: 1.65,
+            color: "var(--ink-500)",
+          }}
+        >
+          完成今天的任务后,这里会出现一份完成度报告。
+        </div>
+      )}
+
+      {stats && tasks.length > 0 && (<>
 
       {/* 主数据 —— 大号百分比 */}
       <div
@@ -184,6 +264,21 @@ export default function DailyReview({ planId, tasks }: DailyReviewProps) {
           small
         />
       </div>
+
+      {/* 今日完成清单 */}
+      {todayCompleted.length > 0 && (
+        <CompletedListCard
+          title="今日完成"
+          count={todayCompleted.length}
+          items={todayCompleted.map((t) => ({
+            task: t,
+            subtasks: todaySubtasks[t.id] ?? [],
+          }))}
+          anchorPrefix="today"
+          anchorMap={anchorMap.current}
+          onOpen={handleOpenDetails}
+        />
+      )}
 
       {/* 耗时对比柱状图 */}
       {barData.length > 0 && (
@@ -310,8 +405,437 @@ export default function DailyReview({ planId, tasks }: DailyReviewProps) {
           </div>
         </div>
       )}
+
+      </>)}
+
+      {/* 历史完成趋势 —— 支持区间切换，点柱条展开当日清单 */}
+      {hasHistory && (
+        <div
+          style={{
+            padding: "20px 22px",
+            background: "var(--paper-0)",
+            border: "1px solid var(--rule-line)",
+            borderRadius: "var(--radius-lg)",
+            boxShadow: "var(--shadow-paper-low)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              marginBottom: 14,
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "var(--ink-900)",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              近 {historyDays} 天完成
+            </span>
+            <div
+              style={{
+                display: "inline-flex",
+                background: "var(--paper-1)",
+                border: "1px solid var(--rule-line)",
+                borderRadius: 999,
+                padding: 2,
+                gap: 2,
+              }}
+              role="tablist"
+              aria-label="历史区间"
+            >
+              {HISTORY_WINDOWS.map((d) => {
+                const selected = historyDays === d;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setHistoryDays(d)}
+                    className="text-mono"
+                    style={{
+                      padding: "4px 10px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: "-0.01em",
+                      borderRadius: 999,
+                      border: "none",
+                      cursor: "pointer",
+                      background: selected
+                        ? "var(--vermilion-600)"
+                        : "transparent",
+                      color: selected ? "#fff" : "var(--ink-500)",
+                      transition: "var(--transition-fast)",
+                    }}
+                    title={`近 ${d} 天`}
+                  >
+                    {d}d
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {history.map((h) => {
+              const isToday = h.date === dayjsToday();
+              const pct = (h.completed / historyMax) * 100;
+              const empty = h.completed === 0;
+              const isExpanded = expandedDate === h.date;
+              const disabled = empty;
+              return (
+                <div key={h.date}>
+                  <button
+                    type="button"
+                    onClick={() => !disabled && handleToggleDate(h.date)}
+                    disabled={disabled}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "46px 1fr 36px",
+                      alignItems: "center",
+                      gap: 10,
+                      width: "100%",
+                      padding: "6px 6px",
+                      margin: "-6px -6px",
+                      border: "none",
+                      background: isExpanded
+                        ? "var(--accent-primary-softer)"
+                        : "transparent",
+                      borderRadius: "var(--radius-sm)",
+                      cursor: disabled ? "default" : "pointer",
+                      transition: "background 160ms ease",
+                      textAlign: "left",
+                    }}
+                    title={disabled ? "当日无完成记录" : "点击查看当日完成项"}
+                  >
+                    <span
+                      className="text-mono"
+                      style={{
+                        fontSize: 11,
+                        color: isToday
+                          ? "var(--vermilion-600)"
+                          : "var(--ink-500)",
+                        letterSpacing: "-0.01em",
+                        fontWeight: isToday ? 600 : 400,
+                      }}
+                    >
+                      {h.date.slice(5)}
+                    </span>
+                    <div
+                      style={{
+                        position: "relative",
+                        height: 6,
+                        background: "var(--ink-100)",
+                        borderRadius: 999,
+                        overflow: "hidden",
+                        boxShadow: isExpanded
+                          ? "0 0 0 2px var(--accent-primary)"
+                          : "none",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: empty ? 0 : `${pct}%`,
+                          minWidth: empty ? 0 : 4,
+                          height: "100%",
+                          background: isToday
+                            ? "var(--vermilion-600)"
+                            : "var(--moss-600)",
+                          borderRadius: 999,
+                          transition: "width 420ms var(--ease-out-back)",
+                        }}
+                      />
+                      {empty && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            borderTop: "1px dashed var(--ink-200)",
+                            top: "50%",
+                          }}
+                        />
+                      )}
+                    </div>
+                    <span
+                      className="text-mono"
+                      style={{
+                        fontSize: 11,
+                        color: empty ? "var(--ink-300)" : "var(--ink-700)",
+                        textAlign: "right",
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
+                      {h.completed}
+                    </span>
+                  </button>
+
+                  {isExpanded && (
+                    <div style={{ marginTop: 10, marginBottom: 6 }}>
+                      {expandedLoading && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "var(--ink-400)",
+                            padding: "8px 4px",
+                          }}
+                        >
+                          正在加载 {h.date.slice(5)} 的完成项…
+                        </div>
+                      )}
+                      {!expandedLoading && expandedData && (
+                        <CompletedListCard
+                          title={`${h.date} 完成`}
+                          count={expandedData.tasks.length}
+                          items={expandedData.tasks.map((t) => ({
+                            task: t,
+                            subtasks: expandedData.subtasksByTask[t.id] ?? [],
+                          }))}
+                          anchorPrefix={`d:${h.date}`}
+                          anchorMap={anchorMap.current}
+                          onOpen={handleOpenDetails}
+                          dense
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {openTask && (
+        <TaskDetailsPopover
+          readOnly
+          task={openTask}
+          hasSubtasks={openSubtasks.length > 0}
+          decomposing={false}
+          subtasks={openSubtasks}
+          anchorRef={openAnchorRef}
+          onUpdate={() => {}}
+          onDecompose={() => {}}
+          onDelete={() => {}}
+          onClose={() => setOpenTask(null)}
+        />
+      )}
     </div>
   );
+}
+
+function CompletedListCard({
+  title,
+  count,
+  items,
+  anchorPrefix,
+  anchorMap,
+  onOpen,
+  dense = false,
+}: {
+  title: string;
+  count: number;
+  items: Array<{ task: Task; subtasks: SubTask[] }>;
+  anchorPrefix: string;
+  anchorMap: Map<string, HTMLElement>;
+  onOpen: (task: Task, subs: SubTask[], anchorKey: string) => void;
+  dense?: boolean;
+}) {
+  if (items.length === 0) {
+    return (
+      <div
+        style={{
+          fontSize: 12,
+          color: "var(--ink-400)",
+          padding: "8px 4px",
+        }}
+      >
+        当日没有已完成任务
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        padding: dense ? "14px 16px" : "20px 22px",
+        background: dense ? "var(--paper-1)" : "var(--paper-0)",
+        border: "1px solid var(--rule-line)",
+        borderRadius: "var(--radius-lg)",
+        boxShadow: dense ? "none" : "var(--shadow-paper-low)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          marginBottom: dense ? 10 : 14,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: dense ? 12 : 14,
+            fontWeight: 600,
+            color: "var(--ink-900)",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {title}
+        </span>
+        <span
+          className="text-mono"
+          style={{ fontSize: 11, color: "var(--ink-400)" }}
+        >
+          {count} 项
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: dense ? 6 : 10 }}>
+        {items.map(({ task, subtasks }) => {
+          const cat = categoryLabels[task.category] || categoryLabels.general;
+          const completedAt = task.completed_at
+            ? dayjs(task.completed_at).format("HH:mm")
+            : "—";
+          const anchorKey = `${anchorPrefix}:${task.id}`;
+          return (
+            <button
+              key={task.id}
+              type="button"
+              ref={(el) => {
+                if (el) anchorMap.set(anchorKey, el);
+                else anchorMap.delete(anchorKey);
+              }}
+              onClick={() => onOpen(task, subtasks, anchorKey)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: dense ? "8px 10px" : "10px 12px",
+                background: dense ? "var(--paper-0)" : "var(--paper-1)",
+                border: "1px solid var(--rule-line)",
+                borderRadius: "var(--radius-md)",
+                width: "100%",
+                cursor: "pointer",
+                textAlign: "left",
+                transition: "var(--transition-fast)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--accent-primary)";
+                e.currentTarget.style.background = "var(--accent-primary-softer)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--rule-line)";
+                e.currentTarget.style.background = dense
+                  ? "var(--paper-0)"
+                  : "var(--paper-1)";
+              }}
+              title="查看任务详情"
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 20,
+                  height: 20,
+                  borderRadius: 999,
+                  background: "var(--moss-100)",
+                  color: "var(--moss-600)",
+                  flexShrink: 0,
+                }}
+              >
+                <Icon name="check" size="xs" color="var(--moss-600)" />
+              </span>
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 13,
+                  color: "var(--ink-800)",
+                  textDecoration: "line-through",
+                  textDecorationColor: "var(--ink-300)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {task.name}
+              </span>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  fontSize: 10,
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 600,
+                  color: cat.color,
+                  background: cat.bg,
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  flexShrink: 0,
+                }}
+              >
+                <Icon name={cat.icon} size="xs" color={cat.color} />
+                {cat.text}
+              </span>
+              <span
+                className="text-mono"
+                style={{
+                  fontSize: 11,
+                  color: "var(--ink-500)",
+                  letterSpacing: "-0.01em",
+                  flexShrink: 0,
+                  width: 40,
+                  textAlign: "right",
+                }}
+              >
+                {completedAt}
+              </span>
+              <span
+                className="text-mono"
+                style={{
+                  fontSize: 11,
+                  color:
+                    task.actual_mins != null
+                      ? "var(--ink-700)"
+                      : "var(--ink-300)",
+                  letterSpacing: "-0.01em",
+                  flexShrink: 0,
+                  width: 36,
+                  textAlign: "right",
+                }}
+              >
+                {task.actual_mins != null ? `${task.actual_mins}′` : "—"}
+              </span>
+              <Icon
+                name="chevron-right"
+                size="xs"
+                color="var(--ink-300)"
+              />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function dayjsToday() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function Stat({

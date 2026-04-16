@@ -1,4 +1,5 @@
-import type { PetState } from "@/types/pet";
+import type { IdleAction, PetState } from "@/types/pet";
+import PetProps from "./PetProps";
 
 const glowColors: Record<PetState, string> = {
   idle: "rgba(255, 215, 0, 0.35)",
@@ -6,6 +7,10 @@ const glowColors: Record<PetState, string> = {
   encourage: "rgba(230, 57, 70, 0.3)",
   rest: "rgba(125, 91, 166, 0.28)",
   reminding: "rgba(255, 140, 66, 0.45)",
+  celebrating: "rgba(255, 60, 172, 0.4)",
+  curious: "rgba(46, 111, 235, 0.32)",
+  sulking: "rgba(140, 149, 168, 0.35)",
+  focused: "rgba(0, 240, 255, 0.32)",
 };
 
 const stateClass: Record<PetState, string> = {
@@ -14,19 +19,42 @@ const stateClass: Record<PetState, string> = {
   encourage: "pika-state-encourage",
   rest: "pika-state-rest",
   reminding: "pika-state-reminding",
+  celebrating: "pika-state-celebrating",
+  curious: "pika-state-curious",
+  sulking: "pika-state-sulking",
+  focused: "pika-state-focused",
+};
+
+const idleActionClass: Record<IdleAction, string> = {
+  stretch: "pika-idle-stretch",
+  yawn: "pika-idle-yawn",
+  hat: "pika-idle-hat",
+  mirror: "pika-idle-mirror",
+  peek: "pika-idle-peek",
+  waving: "pika-idle-waving",
+  sparkle: "pika-idle-sparkle",
+  dance: "pika-idle-dance",
 };
 
 interface PetSpriteProps {
   state: PetState;
+  idleAction?: IdleAction | null;
   size?: number;
 }
 
-export default function PetSprite({ state, size = 140 }: PetSpriteProps) {
-  const isResting = state === "rest";
+export default function PetSprite({
+  state,
+  idleAction = null,
+  size = 140,
+}: PetSpriteProps) {
+  const eyesClosed = state === "rest" || state === "celebrating";
+  const eyesNarrowed = state === "sulking" || state === "focused";
+  const activeIdleClass =
+    state === "idle" && idleAction ? ` ${idleActionClass[idleAction]}` : "";
 
   return (
     <div
-      className={stateClass[state]}
+      className={`${stateClass[state]}${activeIdleClass}`}
       style={{
         width: size,
         height: size,
@@ -103,10 +131,22 @@ export default function PetSprite({ state, size = 140 }: PetSpriteProps) {
         <ellipse cx="134" cy="122" rx="12" ry="9" fill="#FF8FA3" opacity="0.5" filter="url(#pikaBlush)" />
 
         {/* 眼睛 */}
-        {isResting ? (
+        {eyesClosed ? (
           <g className="pika-rest-eyes">
             <path d="M 76,108 Q 85,115 94,108" fill="none" stroke="var(--pika-dark)" strokeWidth="2.8" strokeLinecap="round" />
             <path d="M 106,108 Q 115,115 124,108" fill="none" stroke="var(--pika-dark)" strokeWidth="2.8" strokeLinecap="round" />
+          </g>
+        ) : eyesNarrowed ? (
+          <g className="pika-narrow-eyes">
+            {/* sulking: 向下的斜线；focused: 眉头聚焦，用相同 narrow 表达 */}
+            <path d="M 76,112 Q 85,106 94,110" fill="none" stroke="var(--pika-dark)" strokeWidth="2.6" strokeLinecap="round" />
+            <path d="M 106,110 Q 115,106 124,112" fill="none" stroke="var(--pika-dark)" strokeWidth="2.6" strokeLinecap="round" />
+            {state === "focused" && (
+              <>
+                <circle cx="85" cy="110" r="2.2" fill="#00C2D1" />
+                <circle cx="115" cy="110" r="2.2" fill="#00C2D1" />
+              </>
+            )}
           </g>
         ) : (
           <g className="pika-eyes">
@@ -122,9 +162,12 @@ export default function PetSprite({ state, size = 140 }: PetSpriteProps) {
         {/* 鼻子 */}
         <path d="M 100,117.5 L 98.2,120.5 L 101.8,120.5 Z" fill="#555" />
 
-        {/* 嘴巴 */}
-        {state === "idle" && (
+        {/* 嘴巴 —— 按状态区分 */}
+        {state === "idle" && idleAction !== "yawn" && (
           <path d="M 92,124 Q 96,129 100,124 Q 104,129 108,124" fill="none" stroke="var(--pika-dark)" strokeWidth="1.8" strokeLinecap="round" />
+        )}
+        {state === "idle" && idleAction === "yawn" && (
+          <ellipse cx="100" cy="128" rx="7" ry="6" fill="rgba(60,30,30,0.25)" stroke="var(--pika-dark)" strokeWidth="1.6" />
         )}
         {state === "thinking" && (
           <ellipse cx="100" cy="126" rx="4" ry="3.2" fill="none" stroke="var(--pika-dark)" strokeWidth="1.6" />
@@ -138,15 +181,30 @@ export default function PetSprite({ state, size = 140 }: PetSpriteProps) {
         {state === "reminding" && (
           <ellipse cx="100" cy="127" rx="5" ry="4" fill="rgba(60,30,30,0.18)" stroke="var(--pika-dark)" strokeWidth="1.8" />
         )}
+        {state === "celebrating" && (
+          <path d="M 86,122 Q 100,142 114,122" fill="rgba(60,30,30,0.15)" stroke="var(--pika-dark)" strokeWidth="2.2" strokeLinecap="round" />
+        )}
+        {state === "curious" && (
+          <path d="M 94,126 Q 100,130 106,126" fill="none" stroke="var(--pika-dark)" strokeWidth="1.6" strokeLinecap="round" />
+        )}
+        {state === "sulking" && (
+          <path d="M 92,128 Q 100,122 108,128" fill="none" stroke="var(--pika-dark)" strokeWidth="1.8" strokeLinecap="round" />
+        )}
+        {state === "focused" && (
+          <path d="M 96,126 L 104,126" stroke="var(--pika-dark)" strokeWidth="1.8" strokeLinecap="round" />
+        )}
 
-        {/* ZZZ */}
-        {isResting && (
+        {/* ZZZ 仅在 rest 时飘出 */}
+        {state === "rest" && (
           <>
             <text className="pika-zzz-1" x="136" y="88" fontSize="15" fill="var(--amber-600)" fontFamily="var(--font-display)" fontWeight="700">Z</text>
             <text className="pika-zzz-2" x="147" y="73" fontSize="12" fill="var(--amber-600)" fontFamily="var(--font-display)" fontWeight="700">z</text>
             <text className="pika-zzz-3" x="155" y="60" fontSize="9" fill="var(--amber-600)" fontFamily="var(--font-display)" fontWeight="700">z</text>
           </>
         )}
+
+        {/* 状态/小动作配件层 */}
+        <PetProps state={state} idleAction={idleAction} />
       </svg>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import dayjs from "dayjs";
 import type { Task, SubTask, ScheduledBlock, TaskCategory } from "@/types/task";
 import SubTaskItem from "./SubTaskItem";
 import TaskDetailsPopover from "./TaskDetailsPopover";
@@ -30,6 +31,7 @@ interface TaskCardProps {
   onStartSubtask: (id: number) => void;
   onCompleteSubtask: (id: number) => void;
   onSkipSubtask: (id: number) => void;
+  onAddSubtask: (taskId: number, name: string) => void | Promise<void>;
 }
 
 export default function TaskCard({
@@ -45,13 +47,20 @@ export default function TaskCard({
   onStartSubtask,
   onCompleteSubtask,
   onSkipSubtask,
+  onAddSubtask,
 }: TaskCardProps) {
-  const [expanded, setExpanded] = useState(task.status === "active");
+  // 默认折叠：5+ 任务的 active 自动展开会挤掉窗口；改由用户主动点击头部展开
+  const [expanded, setExpanded] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(task.name);
   const [decomposeError, setDecomposeError] = useState<string | null>(null);
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  const [draftSubtask, setDraftSubtask] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const subtaskInputRef = useRef<HTMLInputElement>(null);
+  const submittingSubtaskRef = useRef(false);
+  const detailsAnchorRef = useRef<HTMLButtonElement>(null);
 
   const decomposer = useTaskDecompose(task);
 
@@ -66,12 +75,31 @@ export default function TaskCard({
     }
   }, [editingName, task.name]);
 
+  useEffect(() => {
+    if (addingSubtask) {
+      requestAnimationFrame(() => subtaskInputRef.current?.focus());
+    }
+  }, [addingSubtask]);
+
   const completedCount = subtasks.filter((s) => s.status === "completed").length;
   const totalCount = subtasks.length;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
   const isCompleted = task.status === "completed";
   const isActive = task.status === "active";
   const priorityColor = priorityColors[task.priority] || "var(--accent-primary)";
+
+  // 不用 useMemo：isOvertime 依赖当前时钟 dayjs()，即便 task 字段不变，
+  // 跨过 end_time 的那一刻也必须重算。useMemo 依赖不变就缓存会导致
+  // 时间已过但卡片仍显示为"待开始"。
+  // 触发 re-render 的机制：taskAlarm 在 end 到点时 emit "tasks-changed"，
+  // TaskPanel 监听后 loadToday → tasks 数组新引用 → 子组件 re-render。
+  const isOvertime = (() => {
+    if (isCompleted || task.status === "skipped") return false;
+    if (!task.planned_end_time) return false;
+    const [h, m] = task.planned_end_time.split(":").map(Number);
+    const end = dayjs().hour(h).minute(m).second(0).millisecond(0);
+    return dayjs().isAfter(end);
+  })();
 
   const scheduleMap = new Map(schedule.map((b) => [b.subtask.id, b.start]));
   const catInfo = categoryLabels[task.category] || categoryLabels.general;
@@ -102,19 +130,53 @@ export default function TaskCard({
     }
   };
 
+  const commitSubtask = async () => {
+    // 防止 Enter 后 setAddingSubtask(false) 卸载 input，
+    // 触发 onBlur 二次调用导致同一名字插入两条子任务
+    if (submittingSubtaskRef.current) return;
+    const trimmed = draftSubtask.trim();
+    if (!trimmed) {
+      setDraftSubtask("");
+      setAddingSubtask(false);
+      return;
+    }
+    submittingSubtaskRef.current = true;
+    try {
+      await onAddSubtask(task.id, trimmed);
+    } finally {
+      submittingSubtaskRef.current = false;
+      setDraftSubtask("");
+      setAddingSubtask(false);
+    }
+  };
+
+  const cancelSubtask = () => {
+    setDraftSubtask("");
+    setAddingSubtask(false);
+  };
+
+  const stateClass = isOvertime
+    ? "task-overtime-glow"
+    : isActive
+      ? "task-active-glow"
+      : "";
+
   return (
     <div
-      className="animate-card-enter neon-hover-cyan"
+      className={`animate-card-enter neon-hover-cyan ${stateClass}`.trim()}
       style={{
         "--i": index,
         position: "relative",
-        background: "var(--paper-0)",
-        border: isActive
-          ? "1px solid var(--accent-primary)"
-          : "1px solid var(--rule-line)",
+        // active/overtime 的底/边框交给 className 管理（双层 background 渐变 + 动态边框）
+        // 普通态仍用内联 paper-0 + 尺线
+        background: isActive || isOvertime ? undefined : "var(--paper-0)",
+        border:
+          isActive || isOvertime ? undefined : "1px solid var(--rule-line)",
         borderLeft: isActive
           ? "3px solid var(--accent-primary)"
-          : `3px solid ${priorityColor}`,
+          : isOvertime
+            ? "3px solid var(--amber-600)"
+            : `3px solid ${priorityColor}`,
         borderRadius: "var(--radius-lg)",
         overflow: detailsOpen ? "visible" : "hidden",
         opacity: isCompleted ? 0.55 : 1,
@@ -132,7 +194,7 @@ export default function TaskCard({
           display: "flex",
           alignItems: "center",
           gap: 10,
-          padding: "16px 18px",
+          padding: "14px 16px",
           cursor: editingName ? "text" : "pointer",
         }}
       >
@@ -248,7 +310,7 @@ export default function TaskCard({
                 </span>
               </>
             )}
-            {task.planned_start_time && task.planned_end_time && (
+            {task.planned_start_time && (
               <>
                 <span
                   aria-hidden="true"
@@ -263,7 +325,9 @@ export default function TaskCard({
                   className="text-mono"
                   style={{
                     fontSize: 11,
-                    color: "var(--accent-primary)",
+                    color: isOvertime
+                      ? "var(--amber-600)"
+                      : "var(--accent-primary)",
                     letterSpacing: "-0.01em",
                     display: "inline-flex",
                     alignItems: "center",
@@ -271,10 +335,39 @@ export default function TaskCard({
                   }}
                   title="时间锚点"
                 >
-                  <Icon name="clock" size="xs" color="var(--accent-primary)" />
-                  {task.planned_start_time}–{task.planned_end_time}
+                  <Icon
+                    name="clock"
+                    size="xs"
+                    color={
+                      isOvertime ? "var(--amber-600)" : "var(--accent-primary)"
+                    }
+                  />
+                  {task.planned_end_time
+                    ? `${task.planned_start_time}–${task.planned_end_time}`
+                    : `${task.planned_start_time} 起`}
                 </span>
               </>
+            )}
+            {isOvertime && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  fontSize: 11,
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 600,
+                  color: "var(--amber-600)",
+                  background: "var(--amber-100)",
+                  padding: "3px 9px",
+                  borderRadius: 999,
+                  letterSpacing: "0.02em",
+                }}
+                title="已过结束时间，未确认完成"
+              >
+                <Icon name="alert-triangle" size="xs" color="var(--amber-600)" />
+                已超时
+              </span>
             )}
             <span
               aria-hidden="true"
@@ -373,7 +466,7 @@ export default function TaskCard({
             <TaskActionButton
               icon="check"
               label="完成"
-              variant="primary"
+              variant="success"
               onClick={() => onCompleteTask(task.id)}
             />
           )}
@@ -381,6 +474,7 @@ export default function TaskCard({
           {/* 详情按钮 */}
           {!isCompleted && (
             <button
+              ref={detailsAnchorRef}
               className="btn btn-icon btn-ghost"
               onClick={() => setDetailsOpen((v) => !v)}
               style={{
@@ -395,8 +489,8 @@ export default function TaskCard({
           )}
         </div>
 
-        {/* 展开/折叠指示 */}
-        {hasSubtasks && (
+        {/* 展开/折叠指示：未完成任务总显示，用以展开子任务区（含手动添加） */}
+        {!isCompleted && (
           <span
             style={{
               display: "inline-flex",
@@ -412,12 +506,13 @@ export default function TaskCard({
         )}
       </div>
 
-      {/* 详情弹层 */}
+      {/* 详情弹层（Portal 渲染至 body，避免被后续卡片遮挡） */}
       {detailsOpen && (
         <TaskDetailsPopover
           task={task}
           hasSubtasks={hasSubtasks}
           decomposing={decomposer.loading}
+          anchorRef={detailsAnchorRef}
           onUpdate={(fields) => onUpdateFields(task.id, fields)}
           onDecompose={handleDecompose}
           onDelete={() => onDeleteTask(task.id)}
@@ -425,11 +520,11 @@ export default function TaskCard({
         />
       )}
 
-      {/* 子任务列表 */}
-      {expanded && hasSubtasks && (
+      {/* 子任务区：展开后始终渲染，未拆分的任务也能通过"+ 添加子任务"直接创建 */}
+      {expanded && !isCompleted && (
         <div
           style={{
-            padding: "10px 18px 14px 28px",
+            padding: "8px 16px 12px 24px",
             background: "var(--paper-1)",
             borderTop: "1px solid var(--rule-line)",
           }}
@@ -444,6 +539,85 @@ export default function TaskCard({
               onSkip={onSkipSubtask}
             />
           ))}
+
+          {addingSubtask ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                borderRadius: "var(--radius-md)",
+                background: "var(--accent-primary-softer)",
+                border: "1px dashed var(--accent-primary)",
+                marginTop: hasSubtasks ? 4 : 0,
+              }}
+            >
+              <Icon name="plus" size="xs" color="var(--accent-primary)" />
+              <input
+                ref={subtaskInputRef}
+                type="text"
+                value={draftSubtask}
+                placeholder="写下一个小步骤……"
+                onChange={(e) => setDraftSubtask(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitSubtask();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelSubtask();
+                  }
+                }}
+                onBlur={commitSubtask}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 13,
+                  fontFamily: "var(--font-body)",
+                  color: "var(--text-primary)",
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  padding: "2px 0",
+                }}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAddingSubtask(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: "var(--radius-md)",
+                background: "transparent",
+                border: "1px dashed var(--rule-line)",
+                color: "var(--text-muted)",
+                fontSize: 12,
+                fontFamily: "var(--font-body)",
+                cursor: "pointer",
+                transition: "var(--transition-fast)",
+                marginTop: hasSubtasks ? 4 : 0,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--accent-primary)";
+                e.currentTarget.style.color = "var(--accent-primary)";
+                e.currentTarget.style.background = "var(--accent-primary-softer)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--rule-line)";
+                e.currentTarget.style.color = "var(--text-muted)";
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <Icon name="plus" size="xs" color="currentColor" />
+              添加子任务
+            </button>
+          )}
         </div>
       )}
     </div>

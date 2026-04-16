@@ -45,7 +45,7 @@ export function setupReminders(blocks: ScheduledBlock[]) {
           subtaskName: block.subtask.name,
           message: `「${block.subtask.name}」已超时，要继续还是跳过？`,
         });
-        emit("pet-state", { state: "rest" });
+        emit("pet-state", { state: "sulking" });
       }, overtimeDelay);
       timers.push(timer);
     }

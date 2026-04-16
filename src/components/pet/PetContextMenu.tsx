@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { exit } from "@tauri-apps/plugin-process";
 import Icon, { type IconName } from "@/components/shared/Icon";
+import { usePetStore } from "@/stores/usePetStore";
 
 interface MenuItem {
   label: string;
@@ -19,6 +20,8 @@ interface PetContextMenuProps {
 
 export default function PetContextMenu({ x, y, onClose }: PetContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const petState = usePetStore((s) => s.state);
+  const isFocused = petState === "focused";
 
   const items: MenuItem[] = [
     {
@@ -32,10 +35,17 @@ export default function PetContextMenu({ x, y, onClose }: PetContextMenuProps) {
       action: () => invoke("create_task_window"),
     },
     {
-      label: "专注模式",
+      label: isFocused ? "退出专注" : "专注模式",
       icon: "target",
       action: () => {
-        /* Phase 6 实现 */
+        const { setState, showBubble, hideBubble } = usePetStore.getState();
+        if (isFocused) {
+          setState("idle");
+          hideBubble();
+        } else {
+          setState("focused");
+          showBubble("专注中…右键选「退出专注」结束", 0);
+        }
       },
     },
     {
