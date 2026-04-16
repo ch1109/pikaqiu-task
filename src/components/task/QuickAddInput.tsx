@@ -43,26 +43,26 @@ export default function QuickAddInput({ onAdd, autoFocus }: QuickAddInputProps) 
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
-        padding: "14px 18px",
+        gap: 8,
+        padding: "6px 10px",
         background: "var(--paper-0)",
         border: focused
           ? "1px solid var(--vermilion-600)"
           : "1px solid var(--ink-200)",
-        borderRadius: "var(--radius-md)",
+        borderRadius: 999,
         cursor: "text",
         transition:
           "border-color 180ms ease, box-shadow 200ms ease",
         boxShadow: focused
           ? "0 0 0 3px var(--vermilion-200)"
-          : "var(--shadow-paper-low)",
+          : "none",
       }}
     >
       {/* 圆形占位标记 */}
       <div
         style={{
-          width: 20,
-          height: 20,
+          width: 15,
+          height: 15,
           borderRadius: 999,
           border: focused
             ? "1.5px solid var(--vermilion-600)"
@@ -76,7 +76,7 @@ export default function QuickAddInput({ onAdd, autoFocus }: QuickAddInputProps) 
         }}
       >
         {focused && (
-          <Icon name="plus" size={12} color="var(--vermilion-600)" />
+          <Icon name="plus" size={10} color="var(--vermilion-600)" />
         )}
       </div>
 
@@ -95,8 +95,8 @@ export default function QuickAddInput({ onAdd, autoFocus }: QuickAddInputProps) 
           background: "transparent",
           border: "none",
           outline: "none",
-          fontSize: 14,
-          lineHeight: 1.5,
+          fontSize: 13,
+          lineHeight: 1.4,
           fontFamily: "var(--font-body)",
           color: "var(--text-primary)",
           padding: 0,
@@ -113,7 +113,7 @@ export default function QuickAddInput({ onAdd, autoFocus }: QuickAddInputProps) 
             flexShrink: 0,
           }}
         >
-          <Icon name="corner-down-left" size={12} color="var(--ink-500)" />
+          <Icon name="corner-down-left" size={11} color="var(--ink-500)" />
         </span>
       )}
     </div>

@@ -193,8 +193,8 @@ export default function TaskCard({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          padding: "14px 16px",
+          gap: 8,
+          padding: "10px 14px",
           cursor: editingName ? "text" : "pointer",
         }}
       >
@@ -204,6 +204,7 @@ export default function TaskCard({
               display: "flex",
               alignItems: "center",
               gap: 6,
+              minWidth: 0,
             }}
             onClick={(e) => {
               if (editingName) e.stopPropagation();
@@ -246,16 +247,18 @@ export default function TaskCard({
                   e.stopPropagation();
                   setEditingName(true);
                 }}
-                title="双击编辑"
+                title={task.name}
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 600,
-                  lineHeight: 1.45,
+                  lineHeight: 1.35,
                   color: isCompleted
                     ? "var(--text-muted)"
                     : "var(--text-primary)",
                   textDecoration: isCompleted ? "line-through" : "none",
-                  wordBreak: "break-word",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                   flex: 1,
                   minWidth: 0,
                 }}
@@ -269,8 +272,10 @@ export default function TaskCard({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
-              marginTop: 5,
+              gap: 8,
+              marginTop: 4,
+              flexWrap: "wrap",
+              rowGap: 4,
             }}
           >
             <span
@@ -498,7 +503,7 @@ export default function TaskCard({
               transform: expanded ? "rotate(90deg)" : "rotate(0)",
               transition: "transform 200ms ease",
               flexShrink: 0,
-              marginLeft: 2,
+              marginLeft: 0,
             }}
           >
             <Icon name="chevron-right" size="xs" color="var(--ink-400)" />

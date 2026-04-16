@@ -604,6 +604,38 @@
   animation: pika-rest-eyes 3.8s ease-in-out infinite;
 }
 
+/* 撒娇卖萌 (coquette) — 鼠标悬停触发：小幅左右摇摆 + 轻微起伏 */
+@keyframes pika-coquette {
+  0%, 100% { transform: translateY(0) rotate(-4deg) scale(1.02); }
+  25%      { transform: translateY(-2px) rotate(3deg) scale(1.03); }
+  50%      { transform: translateY(-1px) rotate(-3deg) scale(1.02); }
+  75%      { transform: translateY(-2px) rotate(4deg) scale(1.03); }
+}
+
+.pika-state-coquette {
+  animation: pika-coquette 1.6s ease-in-out infinite;
+  will-change: transform;
+  transform-origin: 50% 70%;
+}
+
+/* 撒娇笑眼轻微眨动，呼应摇摆节奏 */
+@keyframes pika-curved-eyes-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  96%           { transform: scaleY(0.35); }
+}
+
+.pika-curved-eyes {
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: pika-curved-eyes-blink 4.8s ease-in-out infinite;
+}
+
+/* 撒娇时腮红加浓 */
+.pika-state-coquette .pika-blush {
+  opacity: 0.85;
+  transition: opacity 220ms ease-out;
+}
+
 /* ---------- 状态级配件动画 ---------- */
 
 @keyframes confetti-fall {
@@ -830,3 +862,22 @@
 .note-1 { animation-delay: 0s; }
 .note-2 { animation-delay: 0.4s; }
 .note-3 { animation-delay: 0.8s; }
+
+/* =================================================================
+ * 列表底部渐隐 —— 引导"下方还有内容"，避免硬切割
+ * 仅底部 18px 范围软渐淡，顶部不做处理（sticky 头已有边界线）
+ * ================================================================= */
+.list-fade-mask {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+}
