@@ -72,7 +72,7 @@ export default function ChatHistory({ messages, loading }: ChatHistoryProps) {
                 lineHeight: 1.55,
               }}
             >
-              整段描述今天的计划,我会帮你拆成清单并排程
+              有什么我可以帮你的吗？聊天、问问题，或者规划今天的任务
             </span>
           </div>
 
@@ -103,9 +103,12 @@ export default function ChatHistory({ messages, loading }: ChatHistoryProps) {
                 marginBottom: 6,
               }}
             >
-              示例
+              试试看
             </div>
-            上午写周报,下午 3 点开会,晚上健身一小时。
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span>💬 帮我把这段话翻译成英文</span>
+              <span>📋 上午写周报，下午 3 点开会，晚上健身</span>
+            </div>
           </div>
         </div>
       )}

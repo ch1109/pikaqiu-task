@@ -68,7 +68,7 @@ export default function ChatMessage({ role, content, index }: ChatMessageProps) 
     >
       <div
         style={{
-          maxWidth: "78%",
+          maxWidth: "82%",
           padding: "14px 18px",
           borderRadius: "var(--radius-lg)",
           background: isUser ? "var(--vermilion-600)" : "var(--paper-0)",

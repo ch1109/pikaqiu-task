@@ -34,7 +34,8 @@ pub async fn create_chat_window(app: AppHandle) -> Result<(), String> {
 
     WebviewWindowBuilder::new(&app, "chat", WebviewUrl::App("index.html".into()))
         .title("CyberPet 对话")
-        .inner_size(440.0, 680.0)
+        .inner_size(500.0, 700.0)
+        .min_inner_size(380.0, 500.0)
         .decorations(false)
         .transparent(true)
         .resizable(true)

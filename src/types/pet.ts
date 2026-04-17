@@ -7,7 +7,8 @@ export type PetState =
   | "celebrating"
   | "curious"
   | "sulking"
-  | "focused";
+  | "focused"
+  | "coquette";
 
 export type IdleAction =
   | "stretch"

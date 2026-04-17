@@ -95,3 +95,50 @@ export function parseTaskModifyResult(raw: string): TaskModifyResult {
   const json = extractJSON(raw);
   return TaskModifyResultSchema.parse(json);
 }
+
+// 统一路由结果 schema
+const ChatReplySchema = z.object({
+  intent: z.literal("chat"),
+  reply: z.string(),
+});
+
+const TaskNewRouterSchema = z.object({
+  intent: z.literal("task_new"),
+  reply: z.string().optional().default(""),
+  tasks: z.array(ExtractedTaskSchema),
+});
+
+const TaskModifyRouterSchema = z.object({
+  intent: z.literal("task_modify"),
+  reply: z.string().optional().default(""),
+  intent_detail: z.enum(["add", "delete", "modify", "redecompose"]),
+  target_task: z.string().nullable(),
+  new_tasks_description: z.string().nullable().optional(),
+  changes: z.object({
+    deadline: z.string().nullable().optional(),
+    priority: z.number().int().min(1).max(5).nullable().optional(),
+    estimated_mins: z.number().int().positive().nullable().optional(),
+  }).nullable().optional(),
+  redecompose_instruction: z.string().nullable().optional(),
+});
+
+export type RouterChatResult = z.infer<typeof ChatReplySchema>;
+export type RouterTaskNewResult = z.infer<typeof TaskNewRouterSchema>;
+export type RouterTaskModifyResult = z.infer<typeof TaskModifyRouterSchema>;
+export type RouterResult = RouterChatResult | RouterTaskNewResult | RouterTaskModifyResult;
+
+export function parseRouterResult(raw: string): RouterResult {
+  const json = extractJSON(raw);
+  const obj = json as { intent?: string };
+
+  switch (obj.intent) {
+    case "chat":
+      return ChatReplySchema.parse(json);
+    case "task_new":
+      return TaskNewRouterSchema.parse(json);
+    case "task_modify":
+      return TaskModifyRouterSchema.parse(json);
+    default:
+      throw new Error(`未知意图: ${obj.intent}`);
+  }
+}

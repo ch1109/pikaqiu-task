@@ -94,8 +94,9 @@ export default function PetWindow() {
     clearSingleClickTimer();
     singleClickTimerRef.current = setTimeout(() => {
       singleClickTimerRef.current = null;
-      // 仅当当前处于 idle 时才抢占为 curious；其他形态（提醒/专注等）尊重原有交互
-      if (usePetStore.getState().state === "idle") {
+      // coquette 与 idle 同属"友善可打断"形态，单击都可切 curious；其他形态（提醒/专注等）尊重原有交互
+      const s = usePetStore.getState().state;
+      if (s === "idle" || s === "coquette") {
         setState("curious");
       }
     }, SINGLE_CLICK_DELAY_MS);
@@ -256,10 +257,11 @@ export default function PetWindow() {
     };
   }, [setState, showBubble, showActionBubble, hideBubble, clearAckTimer]);
 
-  // 鼠标穿透：窗口层面动态切换 ignoreCursorEvents
+  // 鼠标穿透：窗口层面动态切换 ignoreCursorEvents；同时用 overPet 的边沿驱动撒娇 hover
   useEffect(() => {
     const win = getCurrentWindow();
     const ignoreRef = { current: true };
+    const wasOverPetRef = { current: false };
     win.setIgnoreCursorEvents(true);
 
     const id = setInterval(async () => {
@@ -299,6 +301,21 @@ export default function PetWindow() {
           ignoreRef.current = shouldIgnore;
           win.setIgnoreCursorEvents(shouldIgnore);
         }
+
+        // hover 边沿检测：进入桌宠区域时切 coquette；离开时仅当仍在 coquette 才回 idle。
+        // 守卫：只从 idle 进入，且无气泡在显示，避免打断提醒/专注/气泡交互。
+        const was = wasOverPetRef.current;
+        if (overPet && !was) {
+          const { state: s, bubbleText: b } = usePetStore.getState();
+          if (s === "idle" && !b) {
+            usePetStore.getState().setState("coquette");
+          }
+        } else if (!overPet && was) {
+          if (usePetStore.getState().state === "coquette") {
+            usePetStore.getState().setState("idle");
+          }
+        }
+        wasOverPetRef.current = overPet;
       } catch {
         // 忽略：可能窗口尚未完全就绪
       }
@@ -321,8 +338,8 @@ export default function PetWindow() {
       timer = setTimeout(() => {
         const { state: s, bubbleText: b, idleAction: cur } =
           usePetStore.getState();
-        // 非 idle、有气泡、或正在播放上一动作时跳过本轮，仍排下次
-        if (s === "idle" && !b && !cur) {
+        // idle / coquette 都视为"可插入小动作"的平静态；有气泡或正在播放上一动作时跳过本轮，仍排下次
+        if ((s === "idle" || s === "coquette") && !b && !cur) {
           const pick =
             IDLE_ACTIONS[Math.floor(Math.random() * IDLE_ACTIONS.length)];
           triggerIdleAction(pick);

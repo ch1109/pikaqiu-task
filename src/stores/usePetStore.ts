@@ -37,6 +37,7 @@ const STATE_TTL: Record<PetState, number> = {
   curious: 1200,
   sulking: 3000,
   focused: 0,
+  coquette: 0,
 };
 
 let bubbleTimer: ReturnType<typeof setTimeout> | null = null;

@@ -11,6 +11,7 @@ const glowColors: Record<PetState, string> = {
   curious: "rgba(46, 111, 235, 0.32)",
   sulking: "rgba(140, 149, 168, 0.35)",
   focused: "rgba(0, 240, 255, 0.32)",
+  coquette: "rgba(255, 143, 180, 0.38)",
 };
 
 const stateClass: Record<PetState, string> = {
@@ -23,6 +24,7 @@ const stateClass: Record<PetState, string> = {
   curious: "pika-state-curious",
   sulking: "pika-state-sulking",
   focused: "pika-state-focused",
+  coquette: "pika-state-coquette",
 };
 
 const idleActionClass: Record<IdleAction, string> = {
@@ -49,6 +51,7 @@ export default function PetSprite({
 }: PetSpriteProps) {
   const eyesClosed = state === "rest" || state === "celebrating";
   const eyesNarrowed = state === "sulking" || state === "focused";
+  const eyesCurved = state === "coquette";
   const activeIdleClass =
     state === "idle" && idleAction ? ` ${idleActionClass[idleAction]}` : "";
 
@@ -127,14 +130,20 @@ export default function PetSprite({
         <path d="M 150,16 C 147,28 143,35 138,40 L 145,30 Z" fill="var(--pika-dark)" />
 
         {/* 腮红 */}
-        <ellipse cx="66" cy="122" rx="12" ry="9" fill="#FF8FA3" opacity="0.5" filter="url(#pikaBlush)" />
-        <ellipse cx="134" cy="122" rx="12" ry="9" fill="#FF8FA3" opacity="0.5" filter="url(#pikaBlush)" />
+        <ellipse className="pika-blush" cx="66" cy="122" rx="12" ry="9" fill="#FF8FA3" opacity="0.5" filter="url(#pikaBlush)" />
+        <ellipse className="pika-blush" cx="134" cy="122" rx="12" ry="9" fill="#FF8FA3" opacity="0.5" filter="url(#pikaBlush)" />
 
         {/* 眼睛 */}
         {eyesClosed ? (
           <g className="pika-rest-eyes">
             <path d="M 76,108 Q 85,115 94,108" fill="none" stroke="var(--pika-dark)" strokeWidth="2.8" strokeLinecap="round" />
             <path d="M 106,108 Q 115,115 124,108" fill="none" stroke="var(--pika-dark)" strokeWidth="2.8" strokeLinecap="round" />
+          </g>
+        ) : eyesCurved ? (
+          /* 撒娇笑眼：向上弯的月牙 ∩ ∩，控制点 y 更小 → 屏幕上更高 */
+          <g className="pika-curved-eyes">
+            <path d="M 76,110 Q 85,102 94,110" fill="none" stroke="var(--pika-dark)" strokeWidth="3" strokeLinecap="round" />
+            <path d="M 106,110 Q 115,102 124,110" fill="none" stroke="var(--pika-dark)" strokeWidth="3" strokeLinecap="round" />
           </g>
         ) : eyesNarrowed ? (
           <g className="pika-narrow-eyes">
@@ -192,6 +201,10 @@ export default function PetSprite({
         )}
         {state === "focused" && (
           <path d="M 96,126 L 104,126" stroke="var(--pika-dark)" strokeWidth="1.8" strokeLinecap="round" />
+        )}
+        {state === "coquette" && (
+          /* 撒娇微张：下唇一抹小微笑 */
+          <path d="M 92,124 Q 100,132 108,124" fill="rgba(255,143,180,0.22)" stroke="var(--pika-dark)" strokeWidth="1.8" strokeLinecap="round" />
         )}
 
         {/* ZZZ 仅在 rest 时飘出 */}

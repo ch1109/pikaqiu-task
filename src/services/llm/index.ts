@@ -26,7 +26,10 @@ export async function getLLMProvider(): Promise<LLMProvider> {
   }
 
   if (mode === "local") {
-    cachedProvider = new LocalProvider();
+    cachedProvider = new LocalProvider(
+      settings.llm_api_url || "http://localhost:11434/v1",
+      settings.llm_model
+    );
   } else {
     cachedProvider = new APIProvider(
       settings.llm_api_url,

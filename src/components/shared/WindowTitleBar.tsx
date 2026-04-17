@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Icon from "@/components/shared/Icon";
 
@@ -6,6 +7,11 @@ interface WindowTitleBarProps {
   title: string;
   /** 隐藏关闭按钮 */
   hideClose?: boolean;
+  /**
+   * 右侧附加操作（渲染在关闭按钮左边）。
+   * 子节点应自行设置 `data-tauri-drag-region="false"`，否则会被 OS 拖拽截获 mousedown。
+   */
+  rightActions?: ReactNode;
 }
 
 /**
@@ -20,6 +26,7 @@ interface WindowTitleBarProps {
 export default function WindowTitleBar({
   title,
   hideClose = false,
+  rightActions,
 }: WindowTitleBarProps) {
   return (
     <div
@@ -48,6 +55,24 @@ export default function WindowTitleBar({
       >
         {title}
       </span>
+
+      {rightActions && (
+        <div
+          data-tauri-drag-region="false"
+          style={{
+            position: "absolute",
+            top: "50%",
+            // 关闭按钮占 14+28=42px 宽；留 8px gap → 50px
+            right: hideClose ? 14 : 50,
+            transform: "translateY(-50%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          {rightActions}
+        </div>
+      )}
 
       {!hideClose && (
         <button

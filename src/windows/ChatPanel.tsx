@@ -1,22 +1,34 @@
-import { useCallback, useEffect } from "react";
-import { emit } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useState } from "react";
+import { emit, listen } from "@tauri-apps/api/event";
 import WindowTitleBar from "@/components/shared/WindowTitleBar";
 import ChatHistory from "@/components/chat/ChatHistory";
 import ChatInput from "@/components/chat/ChatInput";
+import ChatHistoryDrawer from "@/components/chat/ChatHistoryDrawer";
+import PresetBar from "@/components/chat/PresetBar";
+import Icon from "@/components/shared/Icon";
 import { useChatStore } from "@/stores/useChatStore";
+import { useChatSessionStore } from "@/stores/useChatSessionStore";
 import { useTaskStore } from "@/stores/useTaskStore";
+import { usePresetStore } from "@/stores/usePresetStore";
+import { useSkillStore } from "@/stores/useSkillStore";
 import { useLLM } from "@/hooks/useLLM";
-import { buildTaskExtractMessages } from "@/prompts/taskExtract";
+import { buildChatRouterMessages } from "@/prompts/chatRouter";
 import { buildTaskDecomposeMessages } from "@/prompts/taskDecompose";
-import { buildTaskModifyMessages } from "@/prompts/taskModify";
+import { buildSkillMessages } from "@/prompts/skillPrompt";
+import { parseSkillInvocation } from "@/services/skillParser";
+import { resolveSkillAction } from "@/services/skillRegistry";
 import {
-  parseTaskExtractResult,
+  parseRouterResult,
   parseTaskDecomposeResult,
-  parseTaskModifyResult,
+  type ExtractedTask,
+  type RouterTaskModifyResult,
 } from "@/services/taskParser";
 
 export default function ChatPanel() {
-  const { messages, loadAll, addMessage } = useChatStore();
+  const { messages, resumeOrStartToday, startNewSession, addMessage } =
+    useChatStore();
+  const { loadAll: loadSessions } = useChatSessionStore();
+  const [historyOpen, setHistoryOpen] = useState(false);
   const {
     currentPlan,
     tasks,
@@ -29,40 +41,46 @@ export default function ChatPanel() {
     loadToday,
   } = useTaskStore();
   const { loading, call } = useLLM();
+  const { loadAll: loadPresets } = usePresetStore();
+  const { skills, loadAll: loadSkills, reload: reloadSkills } = useSkillStore();
 
   useEffect(() => {
-    loadAll();
+    resumeOrStartToday();
     loadToday();
-  }, [loadAll, loadToday]);
+    loadPresets();
+    loadSkills();
+    loadSessions();
+  }, [resumeOrStartToday, loadToday, loadPresets, loadSkills, loadSessions]);
 
-  /** 新建任务流程：解析 + 拆解 + 排程 */
+  const handleNewSession = useCallback(async () => {
+    await startNewSession();
+  }, [startNewSession]);
+
+  // 技能在 SettingsPanel 变更后广播 skills-updated，这里强制刷新
+  useEffect(() => {
+    const unlisten = listen("skills-updated", () => {
+      reloadSkills();
+    });
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+    };
+  }, [reloadSkills]);
+
+  /** 构建最近 10 条历史上下文 */
+  const getHistory = useCallback(() => {
+    return messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .slice(-10)
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+  }, [messages]);
+
+  /** 任务拆解 + 入库流程（接收已解析的 tasks 数组） */
   const handleNewTasks = useCallback(
-    async (text: string, plan: { id: number }) => {
-      const extractMessages = buildTaskExtractMessages(text);
-      const extractRaw = await call(extractMessages);
-
-      let extractResult;
-      try {
-        extractResult = parseTaskExtractResult(extractRaw);
-      } catch {
-        const retryRaw = await call(extractMessages);
-        extractResult = parseTaskExtractResult(retryRaw);
-      }
-
-      const taskCount = extractResult.tasks.length;
-      if (taskCount === 0) {
-        await addMessage(
-          "assistant",
-          "我没有从你的描述中识别到具体任务。可以更详细地描述一下吗？",
-          plan.id
-        );
-        return;
-      }
-
+    async (extractedTasks: ExtractedTask[], plan: { id: number }) => {
       const summaryLines: string[] = [];
 
-      for (let i = 0; i < extractResult.tasks.length; i++) {
-        const extracted = extractResult.tasks[i];
+      for (let i = 0; i < extractedTasks.length; i++) {
+        const extracted = extractedTasks[i];
 
         const task = await addTask(plan.id, {
           name: extracted.task_name,
@@ -116,7 +134,7 @@ export default function ChatPanel() {
         }
       }
 
-      const totalMins = extractResult.tasks.reduce(
+      const totalMins = extractedTasks.reduce(
         (sum, t) => sum + t.estimated_mins,
         0
       );
@@ -128,7 +146,7 @@ export default function ChatPanel() {
           : `${mins}m`;
 
       const summary = [
-        `已为你规划了 ${taskCount} 个任务，预计总耗时 ${timeStr}：`,
+        `已为你规划了 ${extractedTasks.length} 个任务，预计总耗时 ${timeStr}：`,
         "",
         ...summaryLines,
         "",
@@ -140,24 +158,27 @@ export default function ChatPanel() {
     [addMessage, call, addTask, addSubtask]
   );
 
-  /** 修改任务流程：判断意图 → 分发操作 */
+  /** 任务修改流程（接收已解析的 modify 结果） */
   const handleModifyTask = useCallback(
-    async (text: string, planId: number) => {
-      const existingTaskNames = tasks.map((t) => t.name);
-      const modifyMessages = buildTaskModifyMessages(text, existingTaskNames);
-      const modifyRaw = await call(modifyMessages);
-      const modifyResult = parseTaskModifyResult(modifyRaw);
-
-      if (modifyResult.intent === "add") {
-        // 新增任务 — 复用新建流程
-        const desc =
-          modifyResult.new_tasks_description || text;
-        await handleNewTasks(desc, { id: planId });
+    async (result: RouterTaskModifyResult, planId: number) => {
+      if (result.intent_detail === "add") {
+        const desc = result.new_tasks_description || "";
+        if (!desc) {
+          await addMessage("assistant", "请描述一下要新增的任务内容~", planId);
+          return;
+        }
+        // 新增任务需要重新走路由提取，这里用简单方式：构建消息重新调用
+        const routerMessages = buildChatRouterMessages(desc, [], []);
+        const raw = await call(routerMessages);
+        const parsed = parseRouterResult(raw);
+        if (parsed.intent === "task_new") {
+          await handleNewTasks(parsed.tasks, { id: planId });
+        }
         return;
       }
 
-      // 查找目标任务
-      const targetName = modifyResult.target_task;
+      const existingTaskNames = tasks.map((t) => t.name);
+      const targetName = result.target_task;
       const target = tasks.find(
         (t) =>
           t.name === targetName ||
@@ -173,27 +194,27 @@ export default function ChatPanel() {
         return;
       }
 
-      if (modifyResult.intent === "delete") {
+      if (result.intent_detail === "delete") {
         await deleteTask(target.id);
         await addMessage(
           "assistant",
           `已删除任务 **${target.name}**，日程已自动更新。`,
           planId
         );
-      } else if (modifyResult.intent === "modify") {
+      } else if (result.intent_detail === "modify") {
         const changes: {
           deadline?: string | null;
           priority?: number;
           estimated_mins?: number;
         } = {};
-        if (modifyResult.changes?.deadline !== undefined) {
-          changes.deadline = modifyResult.changes.deadline;
+        if (result.changes?.deadline !== undefined) {
+          changes.deadline = result.changes.deadline;
         }
-        if (modifyResult.changes?.priority) {
-          changes.priority = modifyResult.changes.priority;
+        if (result.changes?.priority) {
+          changes.priority = result.changes.priority;
         }
-        if (modifyResult.changes?.estimated_mins) {
-          changes.estimated_mins = modifyResult.changes.estimated_mins;
+        if (result.changes?.estimated_mins) {
+          changes.estimated_mins = result.changes.estimated_mins;
         }
         await updateTaskFields(target.id, changes);
         const changeDesc = Object.entries(changes)
@@ -204,7 +225,7 @@ export default function ChatPanel() {
           `已更新 **${target.name}**：${changeDesc}`,
           planId
         );
-      } else if (modifyResult.intent === "redecompose") {
+      } else if (result.intent_detail === "redecompose") {
         await clearSubtasks(target.id);
         const decomposeMessages = buildTaskDecomposeMessages(
           target.name,
@@ -257,32 +278,109 @@ export default function ChatPanel() {
   const handleSend = useCallback(
     async (text: string) => {
       const planId = currentPlan?.id ?? null;
+
+      // === Skill 短路分支 ===
+      // /name [args] 形式优先匹配已启用技能；未匹配时继续走 chatRouter 默认流程
+      const invocation = parseSkillInvocation(text, skills);
+      if (invocation) {
+        await addMessage("user", text, planId);
+        try {
+          await emit("pet-state", { state: "thinking" });
+          const messages = buildSkillMessages(invocation, {
+            tasks,
+            history: getHistory(),
+          });
+          // model override 字段已在 DB 预留，当前 LLMOptions 暂不支持按调用切换，MVP 期忽略
+          const reply = await call(messages);
+
+          // 先执行 handler（可能产生副作用并返回替换显示文本，如 skill-creator 的 JSON 不给用户看）
+          // 再 addMessage —— 顺序反过来会让用户看到裸 JSON 一闪
+          const handler = resolveSkillAction(invocation.skill.action_key);
+          let displayReply = reply;
+          if (handler) {
+            const result = await handler({ invocation, llmReply: reply, planId });
+            if (result?.displayReply) displayReply = result.displayReply;
+          }
+          await addMessage("assistant", displayReply, planId);
+
+          // 未指定 pet_focus 时统一回落到 encourage
+          if (invocation.skill.action_key !== "pet_focus") {
+            await emit("pet-state", { state: "encourage" });
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "发生了未知错误";
+          await addMessage(
+            "assistant",
+            `执行 /${invocation.skill.name} 时出错：${errMsg}`,
+            planId
+          );
+          await emit("pet-state", { state: "idle" });
+        }
+        return;
+      }
+
       await addMessage("user", text, planId);
 
       try {
         await emit("pet-state", { state: "thinking" });
 
-        if (currentPlan && tasks.length > 0) {
-          // 已有计划 → 走修改流程
-          await handleModifyTask(text, currentPlan.id);
-        } else {
-          // 无计划 → 走新建流程
+        const history = getHistory();
+        const taskNames = tasks.map((t) => t.name);
+        const routerMessages = buildChatRouterMessages(text, taskNames, history);
+        const routerRaw = await call(routerMessages);
+
+        let routerResult;
+        try {
+          routerResult = parseRouterResult(routerRaw);
+        } catch {
+          // 降级：JSON 解析失败时当作普通对话回复
+          await addMessage("assistant", routerRaw, planId);
+          await emit("pet-state", { state: "encourage" });
+          return;
+        }
+
+        if (routerResult.intent === "chat") {
+          await addMessage("assistant", routerResult.reply, planId);
+          await emit("pet-state", { state: "encourage" });
+        } else if (routerResult.intent === "task_new") {
+          if (routerResult.tasks.length === 0) {
+            const reply = routerResult.reply || "我没有从你的描述中识别到具体任务，可以更详细地描述一下吗？";
+            await addMessage("assistant", reply, planId);
+            await emit("pet-state", { state: "encourage" });
+            return;
+          }
+
           let plan = currentPlan;
           if (!plan) {
             plan = await createPlan(text);
           }
-          await handleNewTasks(text, plan);
-        }
 
-        await emit("pet-state", { state: "encourage" });
-        await emit("tasks-updated", {});
-        // idle 回归由 usePetStore TTL 自动处理（encourage=2500ms）
+          if (routerResult.reply) {
+            await addMessage("assistant", routerResult.reply, plan.id);
+          }
+
+          await handleNewTasks(routerResult.tasks, plan);
+          await emit("pet-state", { state: "encourage" });
+          await emit("tasks-updated", {});
+        } else if (routerResult.intent === "task_modify") {
+          let plan = currentPlan;
+          if (!plan) {
+            plan = await createPlan(text);
+          }
+
+          if (routerResult.reply) {
+            await addMessage("assistant", routerResult.reply, plan.id);
+          }
+
+          await handleModifyTask(routerResult, plan.id);
+          await emit("pet-state", { state: "encourage" });
+        }
       } catch (err) {
         const errMsg =
           err instanceof Error ? err.message : "发生了未知错误";
         await addMessage(
           "assistant",
-          `抱歉，处理时遇到问题：${errMsg}\n\n请检查 LLM 设置后重试。`,
+          `抱歉，处理时遇到问题：${errMsg}\n\n请检查 AI 模型设置后重试。`,
           planId
         );
         await emit("pet-state", { state: "idle" });
@@ -291,8 +389,12 @@ export default function ChatPanel() {
     [
       currentPlan,
       tasks,
+      skills,
+      messages,
       addMessage,
       createPlan,
+      getHistory,
+      call,
       handleNewTasks,
       handleModifyTask,
     ]
@@ -306,10 +408,35 @@ export default function ChatPanel() {
         height: "100%",
         display: "flex",
         flexDirection: "column",
+        position: "relative",
       }}
     >
       <div className="stagger-child" style={{ "--stagger-index": 0 } as React.CSSProperties}>
-        <WindowTitleBar title="对话" />
+        <WindowTitleBar
+          title="对话"
+          rightActions={
+            <>
+              <button
+                data-tauri-drag-region="false"
+                className="btn btn-icon"
+                onClick={handleNewSession}
+                title="新对话"
+                style={{ width: 28, height: 28 }}
+              >
+                <Icon name="plus" size={16} />
+              </button>
+              <button
+                data-tauri-drag-region="false"
+                className="btn btn-icon"
+                onClick={() => setHistoryOpen(true)}
+                title="历史会话"
+                style={{ width: 28, height: 28 }}
+              >
+                <Icon name="scroll-text" size={16} />
+              </button>
+            </>
+          }
+        />
       </div>
 
       {/* 消息区域 */}
@@ -317,18 +444,25 @@ export default function ChatPanel() {
         <ChatHistory messages={messages} loading={loading} />
       </div>
 
-      {/* 输入区 */}
+      {/* 预设 + 输入区 */}
       <div className="stagger-child" style={{ "--stagger-index": 2 } as React.CSSProperties}>
+        <PresetBar />
         <ChatInput
           onSend={handleSend}
           disabled={loading}
           placeholder={
             loading
-              ? "正在规划中…"
-              : "整段描述今天要做的事，AI 会帮你拆解成清单"
+              ? "思考中…"
+              : "问我任何问题，或描述今天的任务…"
           }
         />
       </div>
+
+      {/* 历史会话抽屉（absolute 嵌入，不是独立 Tauri 窗口） */}
+      <ChatHistoryDrawer
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+      />
     </div>
   );
 }

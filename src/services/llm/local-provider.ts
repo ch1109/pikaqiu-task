@@ -1,53 +1,38 @@
+import { invoke } from "@tauri-apps/api/core";
 import type { ChatMessage, LLMOptions, LLMProvider } from "./types";
 
 /**
- * 本地 LLM Provider — 调用 llama.cpp server (localhost:8080)
- * 架构预留，后续集成 Sidecar 启动本地模型
+ * 本地 LLM Provider — 通过 Rust 后端代理请求本地模型服务（Ollama / llama.cpp 等）
+ * 走 invoke("llm_chat") 统一架构，绕过浏览器 CORS 限制
  */
 export class LocalProvider implements LLMProvider {
   name = "local";
 
-  private port = 8080;
+  private baseUrl: string;
+  private model: string;
 
-  constructor(port?: number) {
-    if (port) this.port = port;
+  constructor(baseUrl?: string, model?: string) {
+    this.baseUrl = (baseUrl || "http://localhost:11434/v1").replace(/\/+$/, "");
+    this.model = model || "";
   }
 
   async chat(messages: ChatMessage[], options?: LLMOptions): Promise<string> {
-    const url = `http://localhost:${this.port}/v1/chat/completions`;
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages,
-        temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-      }),
+    return invoke<string>("llm_chat", {
+      baseUrl: this.baseUrl,
+      apiKey: "ollama",
+      model: this.model,
+      messages,
+      temperature: options?.temperature ?? 0.3,
+      maxTokens: options?.maxTokens ?? 2048,
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `本地 LLM 请求失败 (${response.status}): ${errorText}`
-      );
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) {
-      throw new Error("本地 LLM 返回了空内容");
-    }
-    return content;
   }
 
   async isAvailable(): Promise<boolean> {
     try {
-      const response = await fetch(
-        `http://localhost:${this.port}/v1/models`,
-        { signal: AbortSignal.timeout(3000) }
-      );
-      return response.ok;
+      return await invoke<boolean>("llm_check", {
+        baseUrl: this.baseUrl,
+        apiKey: "ollama",
+      });
     } catch {
       return false;
     }

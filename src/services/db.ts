@@ -1,4 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
+import { BUILTIN_SKILLS } from "@/services/seeds/skills";
 
 let db: Database | null = null;
 
@@ -224,6 +225,243 @@ async function runMigrations(database: Database) {
     );
     await database.execute(
       "INSERT INTO _migrations (name) VALUES ('005_task_planned_time')"
+    );
+  }
+
+  // 迁移 006：预设提示词表
+  const applied006 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '006_preset_prompts'"
+  );
+  if (applied006.length === 0) {
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS preset_prompts (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        content     TEXT NOT NULL,
+        icon        TEXT NOT NULL DEFAULT 'sparkles',
+        sort_order  INTEGER NOT NULL DEFAULT 0,
+        is_builtin  INTEGER NOT NULL DEFAULT 0,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+      )
+    `);
+    // 内置种子数据
+    await database.execute(
+      "INSERT INTO preset_prompts (name, content, icon, sort_order, is_builtin) VALUES ('翻译', '请将以下内容翻译为英文：\n', 'sparkles', 0, 1)"
+    );
+    await database.execute(
+      "INSERT INTO preset_prompts (name, content, icon, sort_order, is_builtin) VALUES ('润色', '请润色以下文字，使其更加流畅自然：\n', 'pen-line', 1, 1)"
+    );
+    await database.execute(
+      "INSERT INTO preset_prompts (name, content, icon, sort_order, is_builtin) VALUES ('总结', '请用 3-5 个要点总结以下内容：\n', 'scroll-text', 2, 1)"
+    );
+    await database.execute(
+      "INSERT INTO preset_prompts (name, content, icon, sort_order, is_builtin) VALUES ('解释', '请用通俗易懂的方式解释以下概念：\n', 'lightbulb', 3, 1)"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('006_preset_prompts')"
+    );
+  }
+
+  // 迁移 007：清理预设重复数据 + 唯一约束
+  const applied007 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '007_preset_dedup'"
+  );
+  if (applied007.length === 0) {
+    // 保留每个 name 的最小 id 行，删除其余重复
+    await database.execute(`
+      DELETE FROM preset_prompts WHERE id NOT IN (
+        SELECT MIN(id) FROM preset_prompts GROUP BY name
+      )
+    `);
+    // 加唯一索引防止未来重复
+    await database.execute(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_preset_name ON preset_prompts(name)"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('007_preset_dedup')"
+    );
+  }
+
+  // 迁移 008：技能（Skills）系统 —— /command 触发的结构化工作流
+  const applied008 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '008_skills'"
+  );
+  if (applied008.length === 0) {
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS skills (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        description  TEXT NOT NULL,
+        when_to_use  TEXT NOT NULL DEFAULT '',
+        prompt       TEXT NOT NULL,
+        icon         TEXT NOT NULL DEFAULT 'wand-2',
+        action_key   TEXT,
+        model        TEXT,
+        sort_order   INTEGER NOT NULL DEFAULT 0,
+        is_builtin   INTEGER NOT NULL DEFAULT 0,
+        enabled      INTEGER NOT NULL DEFAULT 1,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+      )
+    `);
+    await database.execute(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_skills_name ON skills(name)"
+    );
+    await database.execute(
+      "CREATE INDEX IF NOT EXISTS idx_skills_sort ON skills(sort_order)"
+    );
+
+    // 内置 skill —— 数据定义在 seeds/skills.ts
+    for (const s of BUILTIN_SKILLS) {
+      await database.execute(
+        `INSERT INTO skills
+          (name, display_name, description, when_to_use, prompt, icon, action_key, sort_order, is_builtin, enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, 1)`,
+        [
+          s.name,
+          s.display_name,
+          s.description,
+          s.when_to_use,
+          s.prompt,
+          s.icon,
+          s.action_key,
+          s.sort_order,
+        ]
+      );
+    }
+
+    await database.execute("INSERT INTO _migrations (name) VALUES ('008_skills')");
+  }
+
+  // 迁移 009：追加内置 skill-creator（对 008 之后新增的种子做幂等补齐）
+  const applied009 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '009_skill_creator'"
+  );
+  if (applied009.length === 0) {
+    const creator = BUILTIN_SKILLS.find((s) => s.name === "skill-creator");
+    if (creator) {
+      // 使用 INSERT OR IGNORE 防止 idx_skills_name 唯一约束冲突
+      // （理论上 008 只插了 plan/review/focus/breakdown，skill-creator 不会冲突；
+      //  但用户若已手动建过同名技能，尊重用户版本）
+      await database.execute(
+        `INSERT OR IGNORE INTO skills
+          (name, display_name, description, when_to_use, prompt, icon, action_key, sort_order, is_builtin, enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, 1)`,
+        [
+          creator.name,
+          creator.display_name,
+          creator.description,
+          creator.when_to_use,
+          creator.prompt,
+          creator.icon,
+          creator.action_key,
+          creator.sort_order,
+        ]
+      );
+    }
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('009_skill_creator')"
+    );
+  }
+
+  // 迁移 010：独立 chat_sessions 表 + chat_messages.session_id
+  // 目的：让 chat 脱离 plan 耦合，支持「新对话」/「历史浏览」/跨天自动切换
+  // 策略：保留 chat_messages.plan_id 不动，仅追加 session_id 列 + 迁移既有数据
+  const applied010 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '010_chat_sessions'"
+  );
+  if (applied010.length === 0) {
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        title      TEXT NOT NULL DEFAULT '新对话',
+        date       TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+      )
+    `);
+    await database.execute(
+      "CREATE INDEX IF NOT EXISTS idx_chat_sessions_date ON chat_sessions(date)"
+    );
+    await database.execute(
+      "CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at)"
+    );
+
+    // 在 chat_messages 上增列 session_id（无 FK，避免 SQLite ALTER 限制；删除级联靠应用层）
+    await database.execute(
+      "ALTER TABLE chat_messages ADD COLUMN session_id INTEGER"
+    );
+    await database.execute(
+      "CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id)"
+    );
+
+    // 数据迁移：把既有消息按 plan_id 聚合成 sessions
+    const msgExists = await database.select<{ cnt: number }[]>(
+      "SELECT COUNT(*) AS cnt FROM chat_messages"
+    );
+    if (msgExists[0]?.cnt > 0) {
+      // 1) 每个非空 plan_id 创建一条 session
+      const planGroups = await database.select<{
+        plan_id: number;
+        date: string;
+        raw_input: string;
+        created_at: string;
+      }[]>(
+        `SELECT p.id AS plan_id, p.date, p.raw_input, p.created_at
+         FROM daily_plans p
+         WHERE EXISTS (SELECT 1 FROM chat_messages m WHERE m.plan_id = p.id)`
+      );
+      for (const g of planGroups) {
+        const title =
+          g.raw_input && g.raw_input.trim()
+            ? g.raw_input.trim().slice(0, 20)
+            : "历史对话";
+        // 取该 plan 最后一条消息时间作为 updated_at，贴近用户认知
+        const lastRows = await database.select<{ last_at: string }[]>(
+          `SELECT MAX(created_at) AS last_at FROM chat_messages WHERE plan_id = $1`,
+          [g.plan_id]
+        );
+        const updatedAt = lastRows[0]?.last_at ?? g.created_at;
+        const ins = await database.execute(
+          `INSERT INTO chat_sessions (title, date, created_at, updated_at)
+           VALUES ($1, $2, $3, $4)`,
+          [title, g.date, g.created_at, updatedAt]
+        );
+        await database.execute(
+          "UPDATE chat_messages SET session_id = $1 WHERE plan_id = $2",
+          [ins.lastInsertId, g.plan_id]
+        );
+      }
+
+      // 2) plan_id IS NULL 的孤儿消息聚合成一条 session
+      const orphanAgg = await database.select<{
+        cnt: number;
+        first_at: string | null;
+        last_at: string | null;
+      }[]>(
+        `SELECT COUNT(*) AS cnt,
+                MIN(created_at) AS first_at,
+                MAX(created_at) AS last_at
+         FROM chat_messages WHERE plan_id IS NULL AND session_id IS NULL`
+      );
+      if ((orphanAgg[0]?.cnt ?? 0) > 0 && orphanAgg[0].first_at) {
+        const firstAt = orphanAgg[0].first_at;
+        const lastAt = orphanAgg[0].last_at ?? firstAt;
+        const date = firstAt.slice(0, 10);
+        const ins = await database.execute(
+          `INSERT INTO chat_sessions (title, date, created_at, updated_at)
+           VALUES ('历史对话', $1, $2, $3)`,
+          [date, firstAt, lastAt]
+        );
+        await database.execute(
+          "UPDATE chat_messages SET session_id = $1 WHERE plan_id IS NULL AND session_id IS NULL",
+          [ins.lastInsertId]
+        );
+      }
+    }
+
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('010_chat_sessions')"
     );
   }
 }

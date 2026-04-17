@@ -4,6 +4,7 @@ import WindowTitleBar from "@/components/shared/WindowTitleBar";
 import { resetProvider } from "@/services/llm";
 import type { LLMMode } from "@/types/settings";
 import Icon from "@/components/shared/Icon";
+import SkillManager from "@/components/skills/SkillManager";
 
 export default function SettingsPanel() {
   const { settings, loading, load, update } = useSettingsStore();
@@ -148,13 +149,35 @@ export default function SettingsPanel() {
               <Field label="模型名称" value={model} onChange={setModel} />
             </>
           ) : (
-            <Field
-              label="模型文件路径"
-              value={localModelPath}
-              onChange={setLocalModelPath}
-              placeholder="/path/to/model.gguf"
-            />
+            <>
+              <Field
+                label="服务地址"
+                value={apiUrl}
+                onChange={setApiUrl}
+                placeholder="http://localhost:11434/v1"
+              />
+              <Field
+                label="模型名称"
+                value={model}
+                onChange={setModel}
+                placeholder="qwen2.5:7b"
+              />
+              <Field
+                label="模型文件路径（Sidecar 预留）"
+                value={localModelPath}
+                onChange={setLocalModelPath}
+                placeholder="/path/to/model.gguf"
+              />
+            </>
           )}
+        </Section>
+
+        {/* 技能管理 */}
+        <Section
+          title="技能库"
+          subtitle="用 /command 触发的可复用工作流。保存后在对话框输入 / 会看到补全"
+        >
+          <SkillManager />
         </Section>
       </div>
 

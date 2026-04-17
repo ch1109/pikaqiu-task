@@ -98,6 +98,49 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     const db = await getDB();
     const today = dayjs().format("YYYY-MM-DD");
 
+    // —— 跨天延续：把历史日 pending/active 任务迁移到今日 plan ——
+    // 幂等：迁移后旧 plan 不再含未完成任务，同日重复调用 loadToday 查询为空，不会重复触发
+    const pendingRows = await db.select<{ id: number }[]>(
+      `SELECT t.id FROM tasks t
+       JOIN daily_plans p ON t.plan_id = p.id
+       WHERE p.date < $1 AND t.status NOT IN ('completed', 'skipped')`,
+      [today]
+    );
+
+    if (pendingRows.length > 0) {
+      // 确保今日 plan 存在（若用户今天尚未手动创建 plan，则自动建一条）
+      let todayPlans = await db.select<DailyPlan[]>(
+        "SELECT * FROM daily_plans WHERE date = $1",
+        [today]
+      );
+      if (todayPlans.length === 0) {
+        const ins = await db.execute(
+          "INSERT INTO daily_plans (date, raw_input) VALUES ($1, $2)",
+          [today, `（自动延续 ${pendingRows.length} 项未完成任务）`]
+        );
+        todayPlans = await db.select<DailyPlan[]>(
+          "SELECT * FROM daily_plans WHERE id = $1",
+          [ins.lastInsertId]
+        );
+      }
+      const todayPlanId = todayPlans[0].id;
+
+      // 批量迁移 plan_id；active 态重置为 pending 并清空 started_at，避免跨日超时流光
+      const ids = pendingRows.map((r) => r.id);
+      const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
+      await db.execute(
+        `UPDATE tasks
+         SET plan_id = $${ids.length + 1},
+             started_at = CASE WHEN status = 'active' THEN NULL ELSE started_at END,
+             status = CASE WHEN status = 'active' THEN 'pending' ELSE status END
+         WHERE id IN (${placeholders})`,
+        [...ids, todayPlanId]
+      );
+
+      // 桌宠软提示。不 emit tasks-changed 避免与监听器回环，末尾 set 自然更新 UI
+      emit("pet-bubble", { text: `延续了 ${pendingRows.length} 项未完成任务` });
+    }
+
     const plans = await db.select<DailyPlan[]>(
       "SELECT * FROM daily_plans WHERE date = $1",
       [today]
