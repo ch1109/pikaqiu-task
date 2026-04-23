@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { listFramesAsDataUrls } from "@/services/character";
-import { usePetStore } from "@/stores/usePetStore";
 import type { CharacterAnimation } from "@/types/character";
 import type { PetState } from "@/types/pet";
 
@@ -12,12 +11,12 @@ interface Props {
 }
 
 /**
- * 自定义角色 PNG 序列帧播放器。
+ * 自定义角色 PNG 静态渲染器。
  *
- * 挂载时并行预取所有动作的帧 data URL → state 切换只是切动画指针，
- * 每动作按 fps 用 setInterval 推进 idx，不重新加载。
- *
- * 当 state 绑定的动作不存在时回退到 idle 绑定；若 idle 也缺失则显示 base.png。
+ * 策略：**只显示单张图片**（当前 state 绑定动作的第 0 帧，否则退回 idle 的第 0 帧，再退回 base.png）。
+ * 当前生图管线产出的 2-4 帧 seed 不一致，硬切帧看起来像"抽卡轮播"。
+ * 改用外层容器 CSS 动画（sprite-{state}）提供呼吸/摇头/弹跳等 transform 动画，
+ * 单帧 + CSS 就足够让桌宠"活起来"。
  */
 export default function SpriteRenderer({
   characterId,
@@ -30,23 +29,15 @@ export default function SpriteRenderer({
   >({});
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [idx, setIdx] = useState(0);
-  const dirRef = useRef<1 | -1>(1);
 
-  // state → animation 映射
-  const currentAnim = useMemo(() => {
-    return (
+  const currentAnim = useMemo(
+    () =>
       animations.find((a) => a.pet_state_binding === state) ||
       animations.find((a) => a.pet_state_binding === "idle") ||
-      null
-    );
-  }, [animations, state]);
+      null,
+    [animations, state]
+  );
 
-  const frames = currentAnim
-    ? framesByAction[currentAnim.action_name] ?? []
-    : [];
-
-  // 批量预取所有动作的帧 + base.png
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
@@ -80,46 +71,6 @@ export default function SpriteRenderer({
     };
   }, [characterId, animations]);
 
-  // state 切换时重置帧索引
-  useEffect(() => {
-    setIdx(0);
-    dirRef.current = 1;
-  }, [currentAnim?.action_name]);
-
-  // 播放调度
-  useEffect(() => {
-    if (!currentAnim || frames.length <= 1) return;
-    const interval = 1000 / Math.max(1, currentAnim.fps);
-    const timer = window.setInterval(() => {
-      setIdx((cur) => {
-        const last = frames.length - 1;
-        if (currentAnim.loop_mode === "once") {
-          if (cur >= last) {
-            // 动画播完：若是非 idle 绑定，尝试回 idle 以触发自然归位
-            if (currentAnim.pet_state_binding !== "idle") {
-              const petState = usePetStore.getState().state;
-              if (petState === currentAnim.pet_state_binding) {
-                usePetStore.getState().setState("idle");
-              }
-            }
-            return cur;
-          }
-          return cur + 1;
-        }
-        if (currentAnim.loop_mode === "pingpong") {
-          const next = cur + dirRef.current;
-          if (next >= last) dirRef.current = -1;
-          else if (next <= 0) dirRef.current = 1;
-          return Math.max(0, Math.min(last, next));
-        }
-        return (cur + 1) % frames.length;
-      });
-    }, interval);
-    return () => window.clearInterval(timer);
-  }, [currentAnim, frames.length]);
-
-  const imgSrc = frames[idx] ?? baseUrl;
-
   if (!loaded) {
     return (
       <div
@@ -138,7 +89,10 @@ export default function SpriteRenderer({
     );
   }
 
-  if (!imgSrc) {
+  const src =
+    (currentAnim && framesByAction[currentAnim.action_name]?.[0]) ?? baseUrl;
+
+  if (!src) {
     return (
       <div
         style={{
@@ -156,18 +110,27 @@ export default function SpriteRenderer({
   }
 
   return (
-    <img
-      src={imgSrc}
-      alt={currentAnim?.action_name ?? "character"}
-      draggable={false}
+    <div
+      className={`sprite-motion sprite-${state}`}
       style={{
         width: size,
         height: size,
-        objectFit: "contain",
-        imageRendering: "auto",
-        userSelect: "none",
+        position: "relative",
         pointerEvents: "none",
       }}
-    />
+    >
+      <img
+        src={src}
+        alt={currentAnim?.action_name ?? "character"}
+        draggable={false}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          userSelect: "none",
+          pointerEvents: "none",
+        }}
+      />
+    </div>
   );
 }

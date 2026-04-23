@@ -881,3 +881,45 @@
     transparent 100%
   );
 }
+
+/* ===== 自定义角色 sprite 状态动画 =====
+ * transform-only：对 PNG 和 SVG 通用，由 SpriteRenderer 外层容器承载。
+ * 幅度比 pika-* 更克制，避免把 512x512 的 PNG 位移到窗口外裁掉。
+ */
+@keyframes sprite-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-7px) scale(1.035); }
+}
+@keyframes sprite-think {
+  0%, 100% { transform: rotate(0) translateY(0); }
+  25%      { transform: rotate(-5deg) translateY(-2px); }
+  75%      { transform: rotate(5deg)  translateY(-2px); }
+}
+@keyframes sprite-bounce {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  20%      { transform: translateY(-18px) scaleY(1.08); }
+  45%      { transform: translateY(0) scaleY(0.9); }
+  60%      { transform: translateY(-8px) scaleY(1.04); }
+}
+@keyframes sprite-drowsy {
+  0%, 100% { transform: rotate(0) translateY(0); }
+  25%      { transform: rotate(-3.5deg) translateY(2px); }
+  75%      { transform: rotate(3.5deg)  translateY(2px); }
+}
+@keyframes sprite-wiggle {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25%      { transform: translateX(-4px) rotate(-2deg); }
+  75%      { transform: translateX(4px)  rotate(2deg); }
+}
+
+.sprite-motion { will-change: transform; transform-origin: 50% 95%; }
+.sprite-idle        { animation: sprite-breathe 2.6s ease-in-out infinite; }
+.sprite-thinking    { animation: sprite-think   2.0s ease-in-out infinite; }
+.sprite-encourage   { animation: sprite-bounce  1.0s ease-in-out infinite; }
+.sprite-rest        { animation: sprite-drowsy  3.0s ease-in-out infinite; }
+.sprite-reminding   { animation: sprite-wiggle  0.4s ease-in-out infinite; }
+.sprite-celebrating { animation: sprite-bounce  0.8s ease-in-out infinite; }
+.sprite-curious     { animation: sprite-think   1.8s ease-in-out infinite; }
+.sprite-sulking     { animation: sprite-breathe 4.0s ease-in-out infinite; }
+.sprite-focused     { animation: sprite-breathe 2.6s ease-in-out infinite; }
+.sprite-coquette    { animation: sprite-wiggle  2.2s ease-in-out infinite; }
