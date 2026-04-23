@@ -1,7 +1,7 @@
 {
   "identifier": "default",
   "description": "CyberPet 默认权限",
-  "windows": ["pet", "chat", "task", "settings"],
+  "windows": ["pet", "chat", "task", "settings", "character-studio"],
   "permissions": [
     "core:default",
     "core:window:default",
@@ -27,6 +27,22 @@
     "notification:default",
     "notification:allow-notify",
     "notification:allow-request-permission",
-    "process:default"
+    "process:default",
+    "fs:default",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-mkdir",
+    "fs:allow-remove",
+    "fs:allow-exists",
+    "fs:allow-read-dir",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$APPDATA/characters" },
+        { "path": "$APPDATA/characters/**" },
+        { "path": "$APPDATA/character_drafts" },
+        { "path": "$APPDATA/character_drafts/**" }
+      ]
+    }
   ]
 }

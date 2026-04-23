@@ -464,4 +464,116 @@ async function runMigrations(database: Database) {
       "INSERT INTO _migrations (name) VALUES ('010_chat_sessions')"
     );
   }
+
+  // 迁移 011：AI 自定义角色三表
+  // - custom_characters：角色主表（基准图 + 种子 + 激活标记）
+  // - character_animations：动作帧集合（按 action_name 归组）
+  // - character_drafts：向导跨会话恢复草稿（JSON payload）
+  const applied011 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '011_custom_characters'"
+  );
+  if (applied011.length === 0) {
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS custom_characters (
+        id               TEXT PRIMARY KEY,
+        name             TEXT NOT NULL,
+        description      TEXT NOT NULL DEFAULT '',
+        ref_prompt       TEXT NOT NULL,
+        base_image_path  TEXT NOT NULL,
+        seed             INTEGER,
+        provider_used    TEXT NOT NULL DEFAULT '',
+        cost_total       REAL NOT NULL DEFAULT 0,
+        is_active        INTEGER NOT NULL DEFAULT 0,
+        created_at       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        updated_at       TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+      )
+    `);
+    await database.execute(
+      "CREATE INDEX IF NOT EXISTS idx_custom_chars_active ON custom_characters(is_active)"
+    );
+
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS character_animations (
+        id                 TEXT PRIMARY KEY,
+        character_id       TEXT NOT NULL REFERENCES custom_characters(id) ON DELETE CASCADE,
+        action_name        TEXT NOT NULL,
+        pet_state_binding  TEXT,
+        prompt_delta       TEXT NOT NULL DEFAULT '',
+        frames_dir         TEXT NOT NULL,
+        frame_count        INTEGER NOT NULL DEFAULT 0,
+        fps                INTEGER NOT NULL DEFAULT 12,
+        loop_mode          TEXT NOT NULL DEFAULT 'loop'
+                           CHECK (loop_mode IN ('loop','once','pingpong')),
+        created_at         TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        UNIQUE(character_id, action_name)
+      )
+    `);
+    await database.execute(
+      "CREATE INDEX IF NOT EXISTS idx_char_anims_char ON character_animations(character_id)"
+    );
+    await database.execute(
+      "CREATE INDEX IF NOT EXISTS idx_char_anims_binding ON character_animations(pet_state_binding)"
+    );
+
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS character_drafts (
+        id         TEXT PRIMARY KEY,
+        step       INTEGER NOT NULL DEFAULT 1,
+        payload    TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+      )
+    `);
+    await database.execute(
+      "CREATE INDEX IF NOT EXISTS idx_char_drafts_updated ON character_drafts(updated_at)"
+    );
+
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('011_custom_characters')"
+    );
+  }
+
+  // 迁移 012：settings 扩字段（图像生成 Provider + 色键抠图 + 每日配额）
+  const applied012 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '012_image_gen_settings'"
+  );
+  if (applied012.length === 0) {
+    // 逐列添加（SQLite 不支持单句多列 ALTER），CHECK 省略避免未来扩展被锁
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN image_gen_provider TEXT NOT NULL DEFAULT 'jimeng'"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN image_gen_api_url TEXT NOT NULL DEFAULT ''"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN image_gen_api_key TEXT NOT NULL DEFAULT ''"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN image_gen_model TEXT NOT NULL DEFAULT ''"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN comfyui_workflow_json TEXT NOT NULL DEFAULT ''"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN chroma_key_color TEXT NOT NULL DEFAULT '#00FF00'"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN chroma_key_tolerance INTEGER NOT NULL DEFAULT 45"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN chroma_key_despill INTEGER NOT NULL DEFAULT 1"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN image_gen_daily_quota INTEGER NOT NULL DEFAULT 200"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN image_gen_today_count INTEGER NOT NULL DEFAULT 0"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN image_gen_today_date TEXT NOT NULL DEFAULT ''"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('012_image_gen_settings')"
+    );
+  }
 }

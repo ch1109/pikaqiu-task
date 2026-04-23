@@ -1,5 +1,7 @@
 import type { IdleAction, PetState } from "@/types/pet";
+import { useCharacterStore } from "@/stores/useCharacterStore";
 import PetProps from "./PetProps";
+import SpriteRenderer from "./SpriteRenderer";
 
 const glowColors: Record<PetState, string> = {
   idle: "rgba(255, 215, 0, 0.35)",
@@ -49,6 +51,30 @@ export default function PetSprite({
   idleAction = null,
   size = 140,
 }: PetSpriteProps) {
+  // 顶层分发：有激活的自定义角色 → SpriteRenderer；否则走原 Pika SVG
+  const active = useCharacterStore((s) => s.active);
+  const activeAnimations = useCharacterStore((s) => s.activeAnimations);
+
+  if (active) {
+    return (
+      <div
+        style={{
+          width: size,
+          height: size,
+          position: "relative",
+          pointerEvents: "none",
+        }}
+      >
+        <SpriteRenderer
+          characterId={active.id}
+          animations={activeAnimations}
+          state={state}
+          size={size}
+        />
+      </div>
+    );
+  }
+
   const eyesClosed = state === "rest" || state === "celebrating";
   const eyesNarrowed = state === "sulking" || state === "focused";
   const eyesCurved = state === "coquette";

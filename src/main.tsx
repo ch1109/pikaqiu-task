@@ -5,6 +5,7 @@ import PetWindow from "./windows/PetWindow";
 import ChatPanel from "./windows/ChatPanel";
 import TaskPanel from "./windows/TaskPanel";
 import SettingsPanel from "./windows/SettingsPanel";
+import CharacterStudio from "./windows/CharacterStudio";
 import "./styles/fonts.css";
 import "./styles/tokens.css";
 import "./styles/globals.css";
@@ -20,6 +21,8 @@ function App() {
       return <TaskPanel />;
     case "settings":
       return <SettingsPanel />;
+    case "character-studio":
+      return <CharacterStudio />;
     default:
       return <PetWindow />;
   }

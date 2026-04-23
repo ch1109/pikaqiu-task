@@ -87,3 +87,29 @@ pub async fn create_settings_window(app: AppHandle) -> Result<(), String> {
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn create_character_studio_window(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("character-studio") {
+        win.show().map_err(|e| e.to_string())?;
+        win.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(
+        &app,
+        "character-studio",
+        WebviewUrl::App("index.html".into()),
+    )
+    .title("CyberPet 角色工坊")
+    .inner_size(860.0, 640.0)
+    .min_inner_size(760.0, 560.0)
+    .decorations(false)
+    .transparent(true)
+    .resizable(true)
+    .center()
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}

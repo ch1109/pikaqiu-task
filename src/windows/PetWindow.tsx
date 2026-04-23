@@ -8,6 +8,7 @@ import PetContextMenu from "@/components/pet/PetContextMenu";
 import { usePetStore } from "@/stores/usePetStore";
 import { useReminderStore } from "@/stores/useReminderStore";
 import { useTaskStore } from "@/stores/useTaskStore";
+import { useCharacterStore } from "@/stores/useCharacterStore";
 import {
   setupCustomReminders,
   clearCustomReminders,
@@ -358,6 +359,11 @@ export default function PetWindow() {
   useEffect(() => {
     return () => clearSingleClickTimer();
   }, [clearSingleClickTimer]);
+
+  // 自定义角色：首次挂载时加载，store 内部自动订阅 character-changed 事件
+  useEffect(() => {
+    void useCharacterStore.getState().init();
+  }, []);
 
   // 任务时间锚点闹钟：PetWindow 独立 zustand 实例，需主动 loadToday 取最新 tasks
   useEffect(() => {

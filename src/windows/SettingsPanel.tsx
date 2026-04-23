@@ -1,10 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import WindowTitleBar from "@/components/shared/WindowTitleBar";
 import { resetProvider } from "@/services/llm";
-import type { LLMMode } from "@/types/settings";
+import { resetImageProvider } from "@/services/image";
+import type { ImageGenProviderName, LLMMode } from "@/types/settings";
 import Icon from "@/components/shared/Icon";
 import SkillManager from "@/components/skills/SkillManager";
+import CharacterGallery from "@/components/character/CharacterGallery";
 
 export default function SettingsPanel() {
   const { settings, loading, load, update } = useSettingsStore();
@@ -20,6 +23,18 @@ export default function SettingsPanel() {
   const [localModelPath, setLocalModelPath] = useState("");
   const [saved, setSaved] = useState(false);
 
+  // 图像生成配置
+  const [imgProvider, setImgProvider] =
+    useState<ImageGenProviderName>("jimeng");
+  const [imgApiUrl, setImgApiUrl] = useState("");
+  const [imgApiKey, setImgApiKey] = useState("");
+  const [imgModel, setImgModel] = useState("");
+  const [chromaTolerance, setChromaTolerance] = useState(45);
+  const [imgDailyQuota, setImgDailyQuota] = useState(200);
+  const [comfyPingState, setComfyPingState] = useState<
+    "idle" | "pinging" | "ok" | "fail"
+  >("idle");
+
   useEffect(() => {
     load();
   }, [load]);
@@ -34,8 +49,27 @@ export default function SettingsPanel() {
       setApiKey(settings.llm_api_key);
       setModel(settings.llm_model);
       setLocalModelPath(settings.local_model_path);
+      setImgProvider(settings.image_gen_provider);
+      setImgApiUrl(settings.image_gen_api_url);
+      setImgApiKey(settings.image_gen_api_key);
+      setImgModel(settings.image_gen_model);
+      setChromaTolerance(settings.chroma_key_tolerance);
+      setImgDailyQuota(settings.image_gen_daily_quota);
     }
   }, [settings]);
+
+  const handleComfyPing = useCallback(async () => {
+    setComfyPingState("pinging");
+    try {
+      const ok = await invoke<boolean>("comfyui_ping", {
+        apiUrl: imgApiUrl || "http://127.0.0.1:8188",
+      });
+      setComfyPingState(ok ? "ok" : "fail");
+    } catch {
+      setComfyPingState("fail");
+    }
+    setTimeout(() => setComfyPingState("idle"), 3200);
+  }, [imgApiUrl]);
 
   const handleSave = useCallback(async () => {
     await update({
@@ -47,11 +81,34 @@ export default function SettingsPanel() {
       llm_api_key: apiKey,
       llm_model: model,
       local_model_path: localModelPath,
+      image_gen_provider: imgProvider,
+      image_gen_api_url: imgApiUrl,
+      image_gen_api_key: imgApiKey,
+      image_gen_model: imgModel,
+      chroma_key_tolerance: chromaTolerance,
+      image_gen_daily_quota: imgDailyQuota,
     });
     resetProvider();
+    resetImageProvider();
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  }, [workStart, workEnd, breakMins, llmMode, apiUrl, apiKey, model, localModelPath, update]);
+  }, [
+    workStart,
+    workEnd,
+    breakMins,
+    llmMode,
+    apiUrl,
+    apiKey,
+    model,
+    localModelPath,
+    imgProvider,
+    imgApiUrl,
+    imgApiKey,
+    imgModel,
+    chromaTolerance,
+    imgDailyQuota,
+    update,
+  ]);
 
   if (loading || !settings) {
     return (
@@ -170,6 +227,170 @@ export default function SettingsPanel() {
               />
             </>
           )}
+        </Section>
+
+        {/* 桌宠形象 */}
+        <Section
+          title="桌宠形象"
+          subtitle="切换内置 Pika 或你创造的自定义角色"
+        >
+          <CharacterGallery />
+        </Section>
+
+        {/* 图像生成 */}
+        <Section
+          title="图像生成"
+          subtitle="角色生成用的 Provider。即梦走云端 API，ComfyUI 走本地 8188 端口"
+        >
+          <div style={{ display: "flex", gap: 10 }}>
+            <ModeBtn
+              active={imgProvider === "jimeng"}
+              label="即梦（火山方舟）"
+              onClick={() => setImgProvider("jimeng")}
+            />
+            <ModeBtn
+              active={imgProvider === "comfyui"}
+              label="ComfyUI 本地"
+              onClick={() => setImgProvider("comfyui")}
+            />
+          </div>
+
+          {imgProvider === "jimeng" ? (
+            <>
+              <Field
+                label="Endpoint"
+                value={imgApiUrl}
+                onChange={setImgApiUrl}
+                placeholder="https://ark.cn-beijing.volces.com/api/v3"
+              />
+              <Field
+                label="API Key"
+                value={imgApiKey}
+                onChange={setImgApiKey}
+                type="password"
+              />
+              <Field
+                label="模型 ID"
+                value={imgModel}
+                onChange={setImgModel}
+                placeholder="doubao-seedream-3-0-t2i-250415"
+              />
+              <Field
+                label="每日调用配额"
+                value={String(imgDailyQuota)}
+                onChange={(v) => setImgDailyQuota(Number(v) || 0)}
+                type="number"
+              />
+            </>
+          ) : (
+            <>
+              <Field
+                label="ComfyUI 地址"
+                value={imgApiUrl}
+                onChange={setImgApiUrl}
+                placeholder="http://127.0.0.1:8188"
+              />
+              <Field
+                label="Checkpoint 名称"
+                value={imgModel}
+                onChange={setImgModel}
+                placeholder="sd_xl_base_1.0.safetensors"
+              />
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--ink-500)",
+                  lineHeight: 1.6,
+                  padding: "8px 12px",
+                  background: "var(--paper-3)",
+                  borderRadius: 8,
+                }}
+              >
+                需先在本地启动 ComfyUI：
+                <code
+                  style={{
+                    fontFamily: "var(--font-mono, monospace)",
+                    background: "var(--ink-100)",
+                    padding: "1px 6px",
+                    borderRadius: 4,
+                    marginLeft: 4,
+                  }}
+                >
+                  python main.py --listen --port 8188
+                </code>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                  onClick={handleComfyPing}
+                  disabled={comfyPingState === "pinging"}
+                  className="btn btn-ghost"
+                  style={{ fontSize: 12, padding: "6px 12px" }}
+                >
+                  {comfyPingState === "pinging" ? "检测中…" : "检测连接"}
+                </button>
+                {comfyPingState === "ok" && (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      color: "var(--moss-600)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Icon name="check" size="xs" accent />
+                    已连通 {imgApiUrl || "http://127.0.0.1:8188"}
+                  </span>
+                )}
+                {comfyPingState === "fail" && (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      color: "var(--seal-red)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Icon name="x" size="xs" accent />
+                    连接失败 —— 请确认 ComfyUI 已启动
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: 6 }}
+          >
+            <label
+              style={{
+                fontSize: 11,
+                color: "var(--text-muted)",
+                letterSpacing: "0.04em",
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <span>绿幕抠图容差</span>
+              <span style={{ color: "var(--vermilion-600)" }}>
+                {chromaTolerance}
+              </span>
+            </label>
+            <input
+              type="range"
+              min={10}
+              max={120}
+              value={chromaTolerance}
+              onChange={(e) => setChromaTolerance(Number(e.target.value))}
+              style={{ width: "100%" }}
+            />
+            <div style={{ fontSize: 11, color: "var(--ink-400)" }}>
+              10 (保守) → 120 (激进)。影响新角色生成时的默认抠图强度。
+            </div>
+          </div>
         </Section>
 
         {/* 技能管理 */}
