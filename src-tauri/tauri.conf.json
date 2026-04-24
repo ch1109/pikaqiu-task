@@ -17,7 +17,7 @@
         "label": "pet",
         "title": "CyberPet",
         "width": 400,
-        "height": 440,
+        "height": 640,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,

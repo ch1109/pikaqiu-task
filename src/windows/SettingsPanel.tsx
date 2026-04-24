@@ -1,13 +1,28 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import WindowTitleBar from "@/components/shared/WindowTitleBar";
 import { resetProvider } from "@/services/llm";
 import { resetImageProvider } from "@/services/image";
-import type { ImageGenProviderName, LLMMode } from "@/types/settings";
+import type {
+  AIVendorId,
+  ImageGenProviderName,
+  LLMMode,
+  VideoGenProviderName,
+} from "@/types/settings";
 import Icon from "@/components/shared/Icon";
 import SkillManager from "@/components/skills/SkillManager";
 import CharacterGallery from "@/components/character/CharacterGallery";
+import AIProviderCard, {
+  type AIProviderCardValue,
+} from "@/components/settings/AIProviderCard";
+import {
+  VENDOR_PRESETS,
+  IMAGE_CAPABLE_VENDORS,
+  VIDEO_CAPABLE_VENDORS,
+  parseCustomConfig,
+  serializeCustomConfig,
+} from "@/services/providers/presets";
 
 export default function SettingsPanel() {
   const { settings, loading, load, update } = useSettingsStore();
@@ -23,55 +38,183 @@ export default function SettingsPanel() {
   const [localModelPath, setLocalModelPath] = useState("");
   const [saved, setSaved] = useState(false);
 
-  // 图像生成配置
-  const [imgProvider, setImgProvider] =
-    useState<ImageGenProviderName>("jimeng");
-  const [imgApiUrl, setImgApiUrl] = useState("");
-  const [imgApiKey, setImgApiKey] = useState("");
-  const [imgModel, setImgModel] = useState("");
+  // 抠图容差 + 每日配额 + 桌宠缩放
   const [chromaTolerance, setChromaTolerance] = useState(45);
   const [imgDailyQuota, setImgDailyQuota] = useState(200);
-  const [comfyPingState, setComfyPingState] = useState<
-    "idle" | "pinging" | "ok" | "fail"
+  const [petScale, setPetScale] = useState(1);
+
+  // AI 创作 Provider —— 单 vendor 模式（默认：图像 + 视频同一家）
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const [unifiedValue, setUnifiedValue] = useState<AIProviderCardValue>({
+    vendor: "jimeng",
+    apiUrl: "",
+    apiKey: "",
+    imageModel: "",
+    videoModel: "",
+    klingSecretKey: "",
+    customConfig: {},
+  });
+  const [imageValue, setImageValue] = useState<AIProviderCardValue>({
+    vendor: "jimeng",
+    apiUrl: "",
+    apiKey: "",
+    imageModel: "",
+    videoModel: "",
+    klingSecretKey: "",
+    customConfig: {},
+  });
+  const [videoValue, setVideoValue] = useState<AIProviderCardValue>({
+    vendor: "gemini",
+    apiUrl: "",
+    apiKey: "",
+    imageModel: "",
+    videoModel: "",
+    klingSecretKey: "",
+    customConfig: {},
+  });
+
+  const [ffmpegState, setFfmpegState] = useState<
+    "idle" | "checking" | "ok" | "fail"
   >("idle");
+
+  // AIProviderCard 的 onChange 稳定引用 —— 避免 SettingsPanel 其他字段（工作时段、LLM URL 等）
+  // 打字导致 AIProviderCard 的 674 行 JSX 跟着重渲染。React.memo 下游靠这个闭包稳定才生效。
+  const handleUnifiedChange = useCallback(
+    (patch: Partial<AIProviderCardValue>) =>
+      setUnifiedValue((s) => ({ ...s, ...patch })),
+    []
+  );
+  const handleImageChange = useCallback(
+    (patch: Partial<AIProviderCardValue>) =>
+      setImageValue((s) => ({ ...s, ...patch })),
+    []
+  );
+  const handleVideoChange = useCallback(
+    (patch: Partial<AIProviderCardValue>) =>
+      setVideoValue((s) => ({ ...s, ...patch })),
+    []
+  );
 
   useEffect(() => {
     load();
   }, [load]);
 
   useEffect(() => {
-    if (settings) {
-      setWorkStart(settings.work_start);
-      setWorkEnd(settings.work_end);
-      setBreakMins(settings.break_mins);
-      setLlmMode(settings.llm_mode);
-      setApiUrl(settings.llm_api_url);
-      setApiKey(settings.llm_api_key);
-      setModel(settings.llm_model);
-      setLocalModelPath(settings.local_model_path);
-      setImgProvider(settings.image_gen_provider);
-      setImgApiUrl(settings.image_gen_api_url);
-      setImgApiKey(settings.image_gen_api_key);
-      setImgModel(settings.image_gen_model);
-      setChromaTolerance(settings.chroma_key_tolerance);
-      setImgDailyQuota(settings.image_gen_daily_quota);
+    if (!settings) return;
+    setWorkStart(settings.work_start);
+    setWorkEnd(settings.work_end);
+    setBreakMins(settings.break_mins);
+    setLlmMode(settings.llm_mode);
+    setApiUrl(settings.llm_api_url);
+    setApiKey(settings.llm_api_key);
+    setModel(settings.llm_model);
+    setLocalModelPath(settings.local_model_path);
+    setChromaTolerance(settings.chroma_key_tolerance);
+    setImgDailyQuota(settings.image_gen_daily_quota);
+    setPetScale(settings.pet_scale);
+
+    // AI Provider —— image/video 是否来自同一 vendor
+    const sameVendor =
+      (settings.image_gen_provider as AIVendorId) ===
+      (settings.video_gen_provider as AIVendorId);
+    setAdvancedMode(!sameVendor);
+
+    const storedCustom = parseCustomConfig(settings.custom_provider_config);
+    if (sameVendor) {
+      setUnifiedValue({
+        vendor: settings.image_gen_provider as AIVendorId,
+        // 优先用图像侧 URL/Key，视频侧如果已填而图像侧为空，则回退视频侧
+        apiUrl: settings.image_gen_api_url || settings.video_gen_api_url,
+        apiKey: settings.image_gen_api_key || settings.video_gen_api_key,
+        imageModel: settings.image_gen_model,
+        videoModel: settings.video_gen_model,
+        klingSecretKey: settings.kling_secret_key,
+        customConfig: storedCustom,
+      });
+    } else {
+      setImageValue({
+        vendor: settings.image_gen_provider as AIVendorId,
+        apiUrl: settings.image_gen_api_url,
+        apiKey: settings.image_gen_api_key,
+        imageModel: settings.image_gen_model,
+        videoModel: "",
+        klingSecretKey: settings.kling_secret_key,
+        customConfig: storedCustom,
+      });
+      setVideoValue({
+        vendor: settings.video_gen_provider,
+        apiUrl: settings.video_gen_api_url,
+        apiKey: settings.video_gen_api_key,
+        imageModel: "",
+        videoModel: settings.video_gen_model,
+        klingSecretKey: settings.kling_secret_key,
+        customConfig: storedCustom,
+      });
     }
   }, [settings]);
 
-  const handleComfyPing = useCallback(async () => {
-    setComfyPingState("pinging");
+  const handleFfmpegCheck = useCallback(async () => {
+    setFfmpegState("checking");
     try {
-      const ok = await invoke<boolean>("comfyui_ping", {
-        apiUrl: imgApiUrl || "http://127.0.0.1:8188",
-      });
-      setComfyPingState(ok ? "ok" : "fail");
+      const ok = await invoke<boolean>("video_check_ffmpeg");
+      setFfmpegState(ok ? "ok" : "fail");
     } catch {
-      setComfyPingState("fail");
+      setFfmpegState("fail");
     }
-    setTimeout(() => setComfyPingState("idle"), 3200);
-  }, [imgApiUrl]);
+    setTimeout(() => setFfmpegState("idle"), 3200);
+  }, []);
 
   const handleSave = useCallback(async () => {
+    // 组装图像 + 视频双字段
+    let imageGenProvider: ImageGenProviderName;
+    let imageApiUrl: string;
+    let imageApiKey: string;
+    let imageModel: string;
+    let videoGenProvider: VideoGenProviderName;
+    let videoApiUrl: string;
+    let videoApiKey: string;
+    let videoModel: string;
+    let klingSk: string;
+    let customCfg: Record<string, string>;
+
+    if (!advancedMode) {
+      const v = unifiedValue;
+      const preset = VENDOR_PRESETS[v.vendor];
+      // 同一 vendor 同时驱动 image + video，endpoint/key 共用
+      imageGenProvider = (
+        preset.image ? v.vendor : "comfyui"
+      ) as ImageGenProviderName;
+      videoGenProvider = (
+        preset.video ? v.vendor : "gemini"
+      ) as VideoGenProviderName;
+      imageApiUrl = v.apiUrl;
+      imageApiKey = v.apiKey;
+      imageModel = v.imageModel;
+      videoApiUrl = preset.video ? v.apiUrl : "";
+      videoApiKey = preset.video ? v.apiKey : "";
+      videoModel = preset.video ? v.videoModel : "";
+      klingSk = v.vendor === "kling" ? v.klingSecretKey : "";
+      customCfg = v.customConfig;
+    } else {
+      imageGenProvider = imageValue.vendor as ImageGenProviderName;
+      imageApiUrl = imageValue.apiUrl;
+      imageApiKey = imageValue.apiKey;
+      imageModel = imageValue.imageModel;
+      videoGenProvider = videoValue.vendor as VideoGenProviderName;
+      videoApiUrl = videoValue.apiUrl;
+      videoApiKey = videoValue.apiKey;
+      videoModel = videoValue.videoModel;
+      // 无论 image 卡或 video 卡选 Kling，任一个都可能提供 SK
+      klingSk =
+        imageValue.vendor === "kling"
+          ? imageValue.klingSecretKey
+          : videoValue.vendor === "kling"
+            ? videoValue.klingSecretKey
+            : "";
+      // 高级模式下两张卡各自持有 customConfig，合并（video 覆盖 image 的同名 key）
+      customCfg = { ...imageValue.customConfig, ...videoValue.customConfig };
+    }
+
     await update({
       work_start: workStart,
       work_end: workEnd,
@@ -81,12 +224,19 @@ export default function SettingsPanel() {
       llm_api_key: apiKey,
       llm_model: model,
       local_model_path: localModelPath,
-      image_gen_provider: imgProvider,
-      image_gen_api_url: imgApiUrl,
-      image_gen_api_key: imgApiKey,
-      image_gen_model: imgModel,
+      image_gen_provider: imageGenProvider,
+      image_gen_api_url: imageApiUrl,
+      image_gen_api_key: imageApiKey,
+      image_gen_model: imageModel,
+      video_gen_provider: videoGenProvider,
+      video_gen_api_url: videoApiUrl,
+      video_gen_api_key: videoApiKey,
+      video_gen_model: videoModel,
+      kling_secret_key: klingSk,
+      custom_provider_config: serializeCustomConfig(customCfg),
       chroma_key_tolerance: chromaTolerance,
       image_gen_daily_quota: imgDailyQuota,
+      pet_scale: petScale,
     });
     resetProvider();
     resetImageProvider();
@@ -101,14 +251,21 @@ export default function SettingsPanel() {
     apiKey,
     model,
     localModelPath,
-    imgProvider,
-    imgApiUrl,
-    imgApiKey,
-    imgModel,
+    advancedMode,
+    unifiedValue,
+    imageValue,
+    videoValue,
     chromaTolerance,
     imgDailyQuota,
+    petScale,
     update,
   ]);
+
+  // 每日配额只对云端厂商有意义，ComfyUI 本地不限
+  const showDailyQuota = useMemo(() => {
+    if (advancedMode) return VENDOR_PRESETS[imageValue.vendor].authKind !== "local";
+    return VENDOR_PRESETS[unifiedValue.vendor].authKind !== "local";
+  }, [advancedMode, imageValue.vendor, unifiedValue.vendor]);
 
   if (loading || !settings) {
     return (
@@ -229,6 +386,59 @@ export default function SettingsPanel() {
           )}
         </Section>
 
+        {/* 桌宠外观 */}
+        <Section
+          title="桌宠外观"
+          subtitle="按比例缩放桌宠大小，保存后立即生效"
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label
+              style={{
+                fontSize: 11,
+                color: "var(--text-muted)",
+                letterSpacing: "0.04em",
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <span>显示大小</span>
+              <span style={{ color: "var(--vermilion-600)" }}>
+                {Math.round(petScale * 100)}%
+                <span
+                  style={{
+                    color: "var(--ink-400)",
+                    marginLeft: 6,
+                    fontWeight: 400,
+                  }}
+                >
+                  约 {Math.round(140 * petScale)}px
+                </span>
+              </span>
+            </label>
+            <input
+              type="range"
+              min={0.5}
+              max={2}
+              step={0.05}
+              value={petScale}
+              onChange={(e) => setPetScale(Number(e.target.value))}
+              style={{ width: "100%" }}
+            />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 11,
+                color: "var(--ink-400)",
+              }}
+            >
+              <span>50%</span>
+              <span>100%（默认）</span>
+              <span>200%</span>
+            </div>
+          </div>
+        </Section>
+
         {/* 桌宠形象 */}
         <Section
           title="桌宠形象"
@@ -237,134 +447,108 @@ export default function SettingsPanel() {
           <CharacterGallery />
         </Section>
 
-        {/* 图像生成 */}
+        {/* AI 创作平台 —— 合并图像 + 视频 */}
         <Section
-          title="图像生成"
-          subtitle="角色生成用的 Provider。即梦走云端 API，ComfyUI 走本地 8188 端口"
+          title="AI 创作平台"
+          subtitle="一次选定供应商即可驱动「角色形象生成」+「动作视频合成」。大部分厂商同一把 Key 同时开通两种能力"
         >
-          <div style={{ display: "flex", gap: 10 }}>
-            <ModeBtn
-              active={imgProvider === "jimeng"}
-              label="即梦（火山方舟）"
-              onClick={() => setImgProvider("jimeng")}
+          {!advancedMode ? (
+            <AIProviderCard
+              mode="single"
+              value={unifiedValue}
+              onChange={handleUnifiedChange}
+              title="供应商"
             />
-            <ModeBtn
-              active={imgProvider === "comfyui"}
-              label="ComfyUI 本地"
-              onClick={() => setImgProvider("comfyui")}
-            />
-          </div>
-
-          {imgProvider === "jimeng" ? (
-            <>
-              <Field
-                label="Endpoint"
-                value={imgApiUrl}
-                onChange={setImgApiUrl}
-                placeholder="https://ark.cn-beijing.volces.com/api/v3"
-              />
-              <Field
-                label="API Key"
-                value={imgApiKey}
-                onChange={setImgApiKey}
-                type="password"
-              />
-              <Field
-                label="模型 ID"
-                value={imgModel}
-                onChange={setImgModel}
-                placeholder="doubao-seedream-3-0-t2i-250415"
-              />
-              <Field
-                label="每日调用配额"
-                value={String(imgDailyQuota)}
-                onChange={(v) => setImgDailyQuota(Number(v) || 0)}
-                type="number"
-              />
-            </>
           ) : (
-            <>
-              <Field
-                label="ComfyUI 地址"
-                value={imgApiUrl}
-                onChange={setImgApiUrl}
-                placeholder="http://127.0.0.1:8188"
-              />
-              <Field
-                label="Checkpoint 名称"
-                value={imgModel}
-                onChange={setImgModel}
-                placeholder="sd_xl_base_1.0.safetensors"
-              />
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 20,
+              }}
+            >
               <div
                 style={{
-                  fontSize: 11,
-                  color: "var(--ink-500)",
-                  lineHeight: 1.6,
-                  padding: "8px 12px",
-                  background: "var(--paper-3)",
-                  borderRadius: 8,
+                  padding: 16,
+                  border: "1px solid var(--rule-line)",
+                  borderRadius: 10,
+                  background: "var(--paper-2)",
                 }}
               >
-                需先在本地启动 ComfyUI：
-                <code
-                  style={{
-                    fontFamily: "var(--font-mono, monospace)",
-                    background: "var(--ink-100)",
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                    marginLeft: 4,
-                  }}
-                >
-                  python main.py --listen --port 8188
-                </code>
+                <AIProviderCard
+                  mode="imageOnly"
+                  value={imageValue}
+                  onChange={handleImageChange}
+                  title="图像生成"
+                  subtitle="角色基础图、精灵帧 sprite 的来源"
+                  availableVendors={IMAGE_CAPABLE_VENDORS}
+                />
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button
-                  onClick={handleComfyPing}
-                  disabled={comfyPingState === "pinging"}
-                  className="btn btn-ghost"
-                  style={{ fontSize: 12, padding: "6px 12px" }}
-                >
-                  {comfyPingState === "pinging" ? "检测中…" : "检测连接"}
-                </button>
-                {comfyPingState === "ok" && (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      color: "var(--moss-600)",
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    <Icon name="check" size="xs" accent />
-                    已连通 {imgApiUrl || "http://127.0.0.1:8188"}
-                  </span>
-                )}
-                {comfyPingState === "fail" && (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      color: "var(--seal-red)",
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    <Icon name="x" size="xs" accent />
-                    连接失败 —— 请确认 ComfyUI 已启动
-                  </span>
-                )}
+              <div
+                style={{
+                  padding: 16,
+                  border: "1px solid var(--rule-line)",
+                  borderRadius: 10,
+                  background: "var(--paper-2)",
+                }}
+              >
+                <AIProviderCard
+                  mode="videoOnly"
+                  value={videoValue}
+                  onChange={handleVideoChange}
+                  title="动作视频"
+                  subtitle="基于基础图生成 4-10 秒循环动作"
+                  availableVendors={VIDEO_CAPABLE_VENDORS}
+                />
               </div>
-            </>
+            </div>
           )}
 
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: 6 }}
+          {/* 高级模式切换 */}
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 12,
+              color: "var(--ink-700)",
+              cursor: "pointer",
+              marginTop: 4,
+              padding: "8px 10px",
+              borderRadius: 8,
+              background: advancedMode ? "var(--paper-3)" : "transparent",
+            }}
           >
+            <input
+              type="checkbox"
+              checked={advancedMode}
+              onChange={(e) => setAdvancedMode(e.target.checked)}
+              style={{ margin: 0 }}
+            />
+            <span>图像与视频使用不同厂商（高级）</span>
+            <span
+              style={{
+                fontSize: 11,
+                color: "var(--ink-400)",
+                marginLeft: "auto",
+              }}
+            >
+              例：ComfyUI 本地出图 + Veo 做动作
+            </span>
+          </label>
+
+          {/* 每日配额（仅云端厂商） */}
+          {showDailyQuota && (
+            <Field
+              label="每日调用配额"
+              value={String(imgDailyQuota)}
+              onChange={(v) => setImgDailyQuota(Number(v) || 0)}
+              type="number"
+            />
+          )}
+
+          {/* 绿幕抠图容差 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <label
               style={{
                 fontSize: 11,
@@ -390,6 +574,48 @@ export default function SettingsPanel() {
             <div style={{ fontSize: 11, color: "var(--ink-400)" }}>
               10 (保守) → 120 (激进)。影响新角色生成时的默认抠图强度。
             </div>
+          </div>
+
+          {/* ffmpeg 检测 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              onClick={handleFfmpegCheck}
+              disabled={ffmpegState === "checking"}
+              className="btn btn-ghost"
+              style={{ fontSize: 12, padding: "6px 12px" }}
+            >
+              {ffmpegState === "checking" ? "检测中…" : "检测 ffmpeg"}
+            </button>
+            {ffmpegState === "ok" && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  color: "var(--moss-600)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                <Icon name="check" size="xs" accent />
+                ffmpeg 就绪
+              </span>
+            )}
+            {ffmpegState === "fail" && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  color: "var(--seal-red)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                <Icon name="x" size="xs" accent />
+                未检测到 —— macOS: brew install ffmpeg
+              </span>
+            )}
           </div>
         </Section>
 

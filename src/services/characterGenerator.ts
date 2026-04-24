@@ -15,8 +15,16 @@ import {
   buildRefineMessages,
 } from "@/prompts/characterPrompt";
 import type { ActionSpec } from "@/types/character";
-import { createCharacterWithAnimations } from "@/services/character";
+import type { Settings } from "@/types/settings";
+import {
+  createCharacterWithAnimations,
+  updateAnimationVideo,
+} from "@/services/character";
 import { consumeQuota } from "@/services/imageQuota";
+import {
+  generateActionVideo,
+  type VideoProgress,
+} from "@/services/video";
 
 /** 无前缀 base64 → 带 data URL 前缀 */
 export function b64ToDataUrl(b64: string): string {
@@ -207,12 +215,21 @@ export async function promoteDraftToCharacter(opts: {
   baseSeed: number | null;
   providerName: string;
   costTotal: number;
+  /**
+   * 可选：预分配的角色 ID。向导阶段若先生成视频再落盘帧，
+   * 需在 Step 4 起手分配 id 让视频直接写进角色目录。
+   */
+  characterId?: string;
   actions: Array<{
     spec: ActionSpec;
     frames: string[]; // 每帧 b64，按顺序
+    /** 若在向导中已生成视频，传入相对路径 "<action>/video.webm" 一并入库 */
+    videoPath?: string | null;
+    videoProvider?: string | null;
+    videoDurationS?: number | null;
   }>;
 }): Promise<string> {
-  const characterId = crypto.randomUUID();
+  const characterId = opts.characterId ?? crypto.randomUUID();
 
   // 1) 保存 base.png
   await invoke("character_save_png_bytes", {
@@ -230,6 +247,9 @@ export async function promoteDraftToCharacter(opts: {
     frame_count: number;
     fps: number;
     loop_mode: ActionSpec["loop_mode"];
+    video_path?: string | null;
+    video_provider?: string | null;
+    video_duration_s?: number | null;
   }> = [];
   for (const a of opts.actions) {
     const dir = a.spec.action_name;
@@ -248,6 +268,9 @@ export async function promoteDraftToCharacter(opts: {
       frame_count: a.frames.length,
       fps: a.spec.fps,
       loop_mode: a.spec.loop_mode,
+      video_path: a.videoPath ?? null,
+      video_provider: a.videoProvider ?? null,
+      video_duration_s: a.videoDurationS ?? null,
     });
   }
 
@@ -265,6 +288,60 @@ export async function promoteDraftToCharacter(opts: {
   });
 
   return characterId;
+}
+
+/**
+ * 为单个动作生成 Veo 视频并抠绿幕落盘。
+ *
+ * 两种调用场景：
+ *   1. 向导中（角色未入库）：调用前先 allocCharacterId，视频直落正式目录；
+ *      完成后把 videoPath 传给 promoteDraftToCharacter 一起入库。
+ *   2. 后期补视频（角色已入库）：生成完成后调 updateAnimationVideo 写 DB。
+ *
+ * `updateDb=false` 时仅落盘不写 DB，由调用方自行决定入库时机。
+ */
+export async function generateVideoForAction(opts: {
+  characterId: string;
+  action: ActionSpec;
+  characterDescription: string;
+  baseImageB64: string;
+  settings: Settings;
+  /** 是否直接写 character_animations 的 video_path 字段（默认 true） */
+  updateDb?: boolean;
+  onProgress?: (p: VideoProgress) => void;
+}): Promise<{
+  videoPath: string;
+  providerName: string;
+  durationS: number;
+}> {
+  const result = await generateActionVideo({
+    characterId: opts.characterId,
+    action: opts.action,
+    characterDescription: opts.characterDescription,
+    baseImageB64: opts.baseImageB64,
+    settings: opts.settings,
+    onProgress: opts.onProgress,
+  });
+  const durationS = opts.action.video_duration_s ?? 4;
+  if (opts.updateDb ?? true) {
+    await updateAnimationVideo({
+      characterId: opts.characterId,
+      actionName: opts.action.action_name,
+      videoPath: result.videoPath,
+      videoProvider: result.providerName,
+      videoDurationS: durationS,
+    });
+  }
+  return {
+    videoPath: result.videoPath,
+    providerName: result.providerName,
+    durationS,
+  };
+}
+
+/** 预分配角色 ID — 向导需要在落盘视频前拿到 id 时使用 */
+export function allocCharacterId(): string {
+  return crypto.randomUUID();
 }
 
 /** 纯浏览器环境下把 base64 解为 Uint8Array，供 Rust invoke 的 bytes 参数使用 */

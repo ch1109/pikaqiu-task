@@ -31,15 +31,23 @@ pub fn run() {
             commands::image::image_download_to_file,
             commands::image::image_check,
             commands::image::comfyui_ping,
+            commands::image::provider_list_models,
             commands::character::character_dir,
             commands::character::character_list_frames,
             commands::character::character_delete_dir,
             commands::character::character_save_png_bytes,
+            commands::character::character_save_bytes,
             commands::character::character_open_dir,
             commands::character::draft_save_png_bytes,
             commands::character::draft_read_png_as_data_url,
             commands::character::draft_delete_dir,
             commands::character::draft_promote_to_character,
+            commands::video::video_generate_start,
+            commands::video::video_poll_operation,
+            commands::video::video_download_to_character,
+            commands::video::video_chroma_key,
+            commands::video::video_check_ffmpeg,
+            commands::video::character_read_bytes,
         ])
         .run(tauri::generate_context!())
         .expect("启动 CyberPet 失败");

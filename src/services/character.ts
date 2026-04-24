@@ -97,6 +97,13 @@ export async function createCharacterWithAnimations(input: {
     frame_count: number;
     fps: number;
     loop_mode: LoopMode;
+    /** 迁移 013：可选视频字段 */
+    video_path?: string | null;
+    video_provider?: string | null;
+    video_duration_s?: number | null;
+    /** 迁移 014：动作级色键参数（本地导入时用） */
+    chroma_key_color?: string | null;
+    chroma_key_tolerance?: number | null;
   }>;
 }): Promise<void> {
   const db = await getDB();
@@ -122,8 +129,10 @@ export async function createCharacterWithAnimations(input: {
     await db.execute(
       `INSERT INTO character_animations
        (id, character_id, action_name, pet_state_binding, prompt_delta,
-        frames_dir, frame_count, fps, loop_mode, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        frames_dir, frame_count, fps, loop_mode,
+        video_path, video_provider, video_duration_s,
+        chroma_key_color, chroma_key_tolerance, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         crypto.randomUUID(),
         input.id,
@@ -134,10 +143,39 @@ export async function createCharacterWithAnimations(input: {
         a.frame_count,
         a.fps,
         a.loop_mode,
+        a.video_path ?? null,
+        a.video_provider ?? null,
+        a.video_duration_s ?? null,
+        a.chroma_key_color ?? null,
+        a.chroma_key_tolerance ?? null,
         now,
       ]
     );
   }
+}
+
+/** 给已存在的动作补/改视频 —— 后期从"动作管理"UI 追加视频时使用 */
+export async function updateAnimationVideo(input: {
+  characterId: string;
+  actionName: string;
+  videoPath: string | null;
+  videoProvider: string | null;
+  videoDurationS: number | null;
+}): Promise<void> {
+  const db = await getDB();
+  await db.execute(
+    `UPDATE character_animations
+     SET video_path = $1, video_provider = $2, video_duration_s = $3
+     WHERE character_id = $4 AND action_name = $5`,
+    [
+      input.videoPath,
+      input.videoProvider,
+      input.videoDurationS,
+      input.characterId,
+      input.actionName,
+    ]
+  );
+  await emit(CHARACTER_CHANGED);
 }
 
 /** 把动作规格换算为"调用成本估算"（即梦按张计，ComfyUI 本地 = 0） */

@@ -28,6 +28,13 @@ export interface CharacterAnimation {
   frame_count: number;
   fps: number;
   loop_mode: LoopMode;
+  /** 迁移 013：抠图后的 WebM 相对路径，如 "<action>/video.webm"；存在则优先播放视频 */
+  video_path: string | null;
+  video_provider: string | null;
+  video_duration_s: number | null;
+  /** 迁移 014：动作级色键参数（本地导入时可定制；NULL 走运行时默认 #00FF00 / 80） */
+  chroma_key_color: string | null;
+  chroma_key_tolerance: number | null;
   created_at: string;
 }
 
@@ -39,6 +46,10 @@ export interface ActionSpec {
   frame_count: number;
   fps: number;
   loop_mode: LoopMode;
+  /** 是否额外生成 Veo 视频；默认关闭，核心 idle/thinking 可默认开 */
+  video_enabled?: boolean;
+  /** 视频时长（秒），默认 4 */
+  video_duration_s?: number;
 }
 
 /** 向导的各个步骤 */
@@ -61,6 +72,8 @@ export interface DraftPayload {
   frames: Record<string, string[]>;
   /** 当前进度（已完成帧数，便于恢复） */
   frames_done: Record<string, number>;
+  /** Step 4b（视频）：每个动作的 WebM 相对路径；未生成则不存在 */
+  videos?: Record<string, string>;
 }
 
 export interface CharacterDraft {

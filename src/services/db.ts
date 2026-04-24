@@ -576,4 +576,117 @@ async function runMigrations(database: Database) {
       "INSERT INTO _migrations (name) VALUES ('012_image_gen_settings')"
     );
   }
+
+  // 迁移 013：角色动作视频 + Gemini Veo 配置
+  // - character_animations 加 video_path / video_provider / video_duration_s
+  //   video_path 为 nullable，相对路径如 "<action>/video.webm"；SpriteRenderer 优先视频、回落静态帧
+  // - settings 加 gemini_api_key / gemini_api_url / gemini_video_model
+  const applied013 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '013_character_video'"
+  );
+  if (applied013.length === 0) {
+    await database.execute(
+      "ALTER TABLE character_animations ADD COLUMN video_path TEXT"
+    );
+    await database.execute(
+      "ALTER TABLE character_animations ADD COLUMN video_provider TEXT"
+    );
+    await database.execute(
+      "ALTER TABLE character_animations ADD COLUMN video_duration_s INTEGER"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN gemini_api_key TEXT NOT NULL DEFAULT ''"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN gemini_api_url TEXT NOT NULL DEFAULT 'https://generativelanguage.googleapis.com/v1beta'"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN gemini_video_model TEXT NOT NULL DEFAULT 'veo-3.0-generate-001'"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('013_character_video')"
+    );
+  }
+
+  // 迁移 014：动作级色键参数
+  // 本地导入的视频背景未必是纯绿，允许每个 animation 单独保存 keyColor/tolerance
+  // NULL 即走运行时默认（#00FF00 / 80），与历史 AI 视频兼容
+  const applied014 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '014_animation_chroma_key'"
+  );
+  if (applied014.length === 0) {
+    await database.execute(
+      "ALTER TABLE character_animations ADD COLUMN chroma_key_color TEXT"
+    );
+    await database.execute(
+      "ALTER TABLE character_animations ADD COLUMN chroma_key_tolerance INTEGER"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('014_animation_chroma_key')"
+    );
+  }
+
+  // 迁移 015：桌宠尺寸缩放系数（0.5 ~ 2.0，1.0 = 140px 基准）
+  const applied015 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '015_pet_scale'"
+  );
+  if (applied015.length === 0) {
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN pet_scale REAL NOT NULL DEFAULT 1.0"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('015_pet_scale')"
+    );
+  }
+
+  // 迁移 016：多厂商 AI 创作 Provider（图像 + 视频）
+  // - 图像 provider 扩容：jimeng / kling / minimax / comfyui
+  // - 视频 provider 独立字段：gemini（原 Veo）/ jimeng / kling / minimax / vidu
+  // - Kling 需要 AccessKey + SecretKey 组合，SK 单独字段存
+  // - 数据迁移：旧 gemini_* 值搬到 video_gen_*，保留原字段兼容
+  const applied016 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '016_multi_ai_provider'"
+  );
+  if (applied016.length === 0) {
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN video_gen_provider TEXT NOT NULL DEFAULT 'gemini'"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN video_gen_api_url TEXT NOT NULL DEFAULT ''"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN video_gen_api_key TEXT NOT NULL DEFAULT ''"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN video_gen_model TEXT NOT NULL DEFAULT ''"
+    );
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN kling_secret_key TEXT NOT NULL DEFAULT ''"
+    );
+    // 旧 gemini_* 字段值搬家，避免 016 之前配置过 Veo 的用户升级后 video 链路断档
+    await database.execute(
+      `UPDATE settings SET
+         video_gen_api_url = gemini_api_url,
+         video_gen_api_key = gemini_api_key,
+         video_gen_model = CASE WHEN gemini_video_model = '' THEN 'veo-3.1-generate-preview' ELSE gemini_video_model END
+       WHERE id = 1`
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('016_multi_ai_provider')"
+    );
+  }
+
+  // 迁移 017：开源 Provider 动态字段（Replicate 版本 / OpenAI 兼容尺寸等）
+  // 用一列 TEXT（存 JSON）承载所有 vendor 的动态字段，避免每加一家 vendor 就要加列
+  const applied017 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '017_custom_provider_config'"
+  );
+  if (applied017.length === 0) {
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN custom_provider_config TEXT NOT NULL DEFAULT '{}'"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('017_custom_provider_config')"
+    );
+  }
 }

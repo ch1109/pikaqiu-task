@@ -93,6 +93,25 @@ pub async fn character_save_png_bytes(
     Ok(p.to_string_lossy().into_owned())
 }
 
+/// 通用字节落盘（PNG / MP4 / WebM 等均复用），本地导入入口使用
+#[tauri::command]
+pub async fn character_save_bytes(
+    app: AppHandle,
+    character_id: String,
+    relative_path: String,
+    bytes: Vec<u8>,
+) -> Result<String, String> {
+    ensure_safe_relative(&relative_path)?;
+    let mut p = characters_root(&app)?;
+    p.push(&character_id);
+    p.push(&relative_path);
+    if let Some(parent) = p.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+    fs::write(&p, &bytes).map_err(|e| format!("写入失败: {}", e))?;
+    Ok(p.to_string_lossy().into_owned())
+}
+
 /// 在系统文件管理器中打开角色目录（方便用户手动查看素材）
 #[tauri::command]
 pub async fn character_open_dir(

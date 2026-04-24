@@ -4,6 +4,8 @@ import Icon from "@/components/shared/Icon";
 import { useCharacterStore } from "@/stores/useCharacterStore";
 import { readCharacterBaseImage } from "@/services/character";
 import type { CustomCharacter } from "@/types/character";
+import LocalImportDialog from "./LocalImportDialog";
+import DefaultCharacterThumb from "./DefaultCharacterThumb";
 
 /**
  * 自定义角色列表：展示 base.png 缩略 + 名称，支持激活/删除/新建角色。
@@ -15,6 +17,7 @@ export default function CharacterGallery() {
     useCharacterStore();
   const [opening, setOpening] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     void init();
@@ -36,11 +39,6 @@ export default function CharacterGallery() {
     },
     [active, setActive]
   );
-
-  const handleResetDefault = useCallback(async () => {
-    if (!active) return;
-    await setActive(null);
-  }, [active, setActive]);
 
   const handleDelete = useCallback(
     async (c: CustomCharacter) => {
@@ -71,98 +69,61 @@ export default function CharacterGallery() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* 当前状态 */}
+      {/* 角色网格：默认 Pika + 自定义角色同网格展示 */}
       <div
         style={{
-          padding: "10px 14px",
-          borderRadius: 10,
-          background: active ? "var(--moss-100)" : "var(--paper-3)",
-          border: `1px solid ${
-            active ? "var(--moss-200)" : "var(--rule-line)"
-          }`,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          fontSize: 12,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
+          gap: 12,
         }}
       >
-        <Icon
-          name={active ? "sparkles" : "circle"}
-          size="sm"
-          accent
-          color={active ? "var(--moss-600)" : "var(--ink-400)"}
+        <DefaultCharacterCard
+          isActive={!active}
+          onActivate={() => void setActive(null)}
         />
-        <div style={{ flex: 1 }}>
-          <div style={{ color: "var(--ink-900)", fontWeight: 600 }}>
-            {active ? `当前：${active.name}` : "当前：默认 Pika"}
-          </div>
-          <div style={{ color: "var(--ink-500)", fontSize: 11, marginTop: 2 }}>
-            {active
-              ? "使用自定义 PNG 序列帧渲染"
-              : "使用内置 SVG 角色"}
-          </div>
-        </div>
-        {active && (
-          <button
-            onClick={handleResetDefault}
-            className="btn btn-ghost"
-            style={{ fontSize: 11, padding: "6px 10px" }}
-          >
-            切回默认
-          </button>
-        )}
+        {characters.map((c) => (
+          <CharacterCard
+            key={c.id}
+            character={c}
+            isActive={active?.id === c.id}
+            deleting={deleting === c.id}
+            onActivate={() => handleActivate(c.id)}
+            onDelete={() => handleDelete(c)}
+          />
+        ))}
       </div>
 
-      {/* 角色网格 */}
-      {characters.length === 0 ? (
-        <div
-          style={{
-            padding: 24,
-            textAlign: "center",
-            color: "var(--ink-500)",
-            fontSize: 12,
-            background: "var(--paper-3)",
-            borderRadius: 10,
-            border: "1px dashed var(--rule-line-strong)",
-          }}
-        >
-          还没有自定义角色，点击下方"创建新角色"开始
-        </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-            gap: 12,
-          }}
-        >
-          {characters.map((c) => (
-            <CharacterCard
-              key={c.id}
-              character={c}
-              isActive={active?.id === c.id}
-              deleting={deleting === c.id}
-              onActivate={() => handleActivate(c.id)}
-              onDelete={() => handleDelete(c)}
-            />
-          ))}
-        </div>
-      )}
-
       {/* 操作区 */}
-      <button
-        onClick={handleOpenStudio}
-        disabled={opening}
-        className="btn btn-cyan"
-        style={{
-          alignSelf: "flex-start",
-          fontSize: 12,
-          padding: "8px 14px",
-        }}
-      >
-        <Icon name="wand-2" size="xs" style={{ marginRight: 6 }} />
-        {opening ? "打开中…" : "创建新角色"}
-      </button>
+      <div style={{ display: "flex", gap: 8, alignSelf: "flex-start" }}>
+        <button
+          onClick={handleOpenStudio}
+          disabled={opening}
+          className="btn btn-cyan"
+          style={{ fontSize: 12, padding: "8px 14px" }}
+        >
+          <Icon name="wand-2" size="xs" style={{ marginRight: 6 }} />
+          {opening ? "打开中…" : "AI 创建"}
+        </button>
+        <button
+          onClick={() => setImportOpen(true)}
+          className="btn btn-ghost"
+          style={{ fontSize: 12, padding: "8px 14px" }}
+        >
+          <Icon name="upload" size="xs" style={{ marginRight: 6 }} />
+          本地导入
+        </button>
+      </div>
+
+      {importOpen && (
+        <LocalImportDialog
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          onDone={() => {
+            setImportOpen(false);
+            void init();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -283,6 +244,94 @@ function CharacterCard({
         >
           <Icon name="trash-2" size="xs" />
         </button>
+      </div>
+      {isActive && (
+        <div
+          style={{
+            position: "absolute",
+            top: 6,
+            right: 6,
+            background: "var(--moss-600)",
+            color: "#fff",
+            fontSize: 10,
+            padding: "2px 6px",
+            borderRadius: 4,
+            fontWeight: 600,
+          }}
+        >
+          当前
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DefaultCharacterCard({
+  isActive,
+  onActivate,
+}: {
+  isActive: boolean;
+  onActivate: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        borderRadius: 12,
+        border: isActive
+          ? "2px solid var(--moss-600)"
+          : "1px solid var(--rule-line)",
+        background: "var(--paper-0)",
+        padding: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        boxShadow: isActive
+          ? "0 0 0 4px rgba(120, 185, 104, 0.18)"
+          : "var(--shadow-paper-low)",
+        transition: "all 160ms ease",
+      }}
+    >
+      <button
+        onClick={onActivate}
+        disabled={isActive}
+        style={{
+          aspectRatio: "1 / 1",
+          borderRadius: 10,
+          border: "none",
+          padding: 0,
+          cursor: isActive ? "default" : "pointer",
+          overflow: "hidden",
+          background: "var(--paper-2)",
+          display: "grid",
+          placeItems: "center",
+        }}
+        title={isActive ? "已是当前角色" : "切回默认 Pika"}
+      >
+        <DefaultCharacterThumb size={88} />
+      </button>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          minHeight: 20,
+        }}
+      >
+        <div
+          style={{
+            flex: 1,
+            fontSize: 12,
+            fontWeight: 600,
+            color: "var(--ink-900)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title="默认 Pika"
+        >
+          默认 Pika
+        </div>
       </div>
       {isActive && (
         <div

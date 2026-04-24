@@ -276,6 +276,17 @@ export default function ActionListStep() {
                   onChange={(v) => updateAction(i, { loop_mode: v })}
                 />
               </div>
+              <VideoRow
+                enabled={!!a.video_enabled}
+                durationS={a.video_duration_s ?? 4}
+                onToggle={(v) =>
+                  updateAction(i, {
+                    video_enabled: v,
+                    video_duration_s: a.video_duration_s ?? 4,
+                  })
+                }
+                onDurationChange={(d) => updateAction(i, { video_duration_s: d })}
+              />
             </div>
           );
         })}
@@ -372,6 +383,101 @@ function NumField({
         }}
       />
     </label>
+  );
+}
+
+function VideoRow({
+  enabled,
+  durationS,
+  onToggle,
+  onDurationChange,
+}: {
+  enabled: boolean;
+  durationS: number;
+  onToggle: (v: boolean) => void;
+  onDurationChange: (d: number) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 10px",
+        background: enabled ? "var(--moss-100)" : "var(--paper-3)",
+        border: `1px dashed ${
+          enabled ? "var(--moss-600)" : "var(--rule-line-strong)"
+        }`,
+        borderRadius: 10,
+        transition: "all 140ms ease",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onToggle(!enabled)}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "4px 10px",
+          borderRadius: 999,
+          border: "none",
+          background: enabled ? "var(--moss-600)" : "var(--paper-0)",
+          color: enabled ? "#fff" : "var(--ink-600)",
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: "pointer",
+          boxShadow: enabled
+            ? "0 1px 3px rgba(0,0,0,.12)"
+            : "inset 0 0 0 1px var(--rule-line-strong)",
+          transition: "all 140ms ease",
+        }}
+        title="启用 Gemini Veo 生成 4s 循环视频（覆盖静态帧）"
+      >
+        <Icon name="video" size="xs" />
+        {enabled ? "视频已启用" : "启用动作视频"}
+      </button>
+      {enabled && (
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12,
+            color: "var(--ink-600)",
+          }}
+        >
+          时长
+          <select
+            value={durationS}
+            onChange={(e) => onDurationChange(Number(e.target.value))}
+            style={{
+              padding: "4px 8px",
+              borderRadius: 6,
+              border: "1px solid var(--rule-line-strong)",
+              fontSize: 12,
+              background: "var(--paper-0)",
+              outline: "none",
+            }}
+          >
+            <option value={4}>4s</option>
+            <option value={6}>6s</option>
+            <option value={8}>8s</option>
+          </select>
+        </label>
+      )}
+      {enabled && (
+        <span
+          style={{
+            fontSize: 10,
+            color: "var(--ink-500)",
+            marginLeft: "auto",
+          }}
+        >
+          Veo 图生视频 · ~${((durationS / 4) * 1.5).toFixed(2)}/条
+        </span>
+      )}
+    </div>
   );
 }
 

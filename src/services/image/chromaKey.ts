@@ -22,7 +22,7 @@ export interface ChromaKeyOptions {
   featherPx?: number;
 }
 
-interface RGB {
+export interface RGB {
   r: number;
   g: number;
   b: number;
@@ -133,6 +133,65 @@ function boxBlurAlpha(
 }
 
 /**
+ * 就地抠色：硬阈值 + 软边 + despill + 可选近黑裁剪。
+ * PNG 抠图 (`chromaKeyRemove`) 与视频实时抠色 (`ChromaKeyVideo`) 共用此循环体。
+ *
+ * 性能优化：
+ *   - 硬阈值用距离平方比较，省掉 `Math.sqrt`（最常见的纯色区像素直接跳过 sqrt）
+ *   - `blackThreshold > 0` 时把近黑裁剪并入本循环，避免调用方再遍历一次
+ */
+export function applyChromaKeyToImageData(
+  data: Uint8ClampedArray,
+  key: RGB,
+  tolerance: number,
+  despill: boolean,
+  blackThreshold: number = 0
+): void {
+  const softMax = tolerance * 1.5;
+  const tolSq = tolerance * tolerance;
+  const softMaxSq = softMax * softMax;
+  const softBand = softMax - tolerance;
+  const doBlack = blackThreshold > 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const dr = r - key.r;
+    const dg = g - key.g;
+    const db = b - key.b;
+    const distSq = dr * dr + dg * dg + db * db;
+
+    if (distSq < tolSq) {
+      data[i + 3] = 0;
+    } else if (distSq < softMaxSq) {
+      // 仅软边区内做 sqrt —— 大多数远离 key 色的像素根本不进这里
+      const dist = Math.sqrt(distSq);
+      const t = (dist - tolerance) / softBand;
+      data[i + 3] = Math.round(data[i + 3] * t);
+    }
+
+    const a = data[i + 3];
+    if (a > 0) {
+      if (despill) {
+        const maxRB = r > b ? r : b;
+        if (g > maxRB) {
+          data[i + 1] = maxRB;
+        }
+      }
+      // 近黑清除（视频首尾 fade 到黑时的残影）合并到本循环
+      if (
+        doBlack &&
+        r < blackThreshold &&
+        g < blackThreshold &&
+        b < blackThreshold
+      ) {
+        data[i + 3] = 0;
+      }
+    }
+  }
+}
+
+/**
  * 主函数：Blob → Blob。
  * 失败时抛异常，由调用方处理（Step 2 里呈现"抠图失败"并允许重试）。
  */
@@ -142,40 +201,14 @@ export async function chromaKeyRemove(
 ): Promise<Blob> {
   const { keyColor, tolerance, despill, featherPx } = { ...DEFAULTS, ...opts };
   const key = parseColor(keyColor);
-  const softMax = tolerance * 1.5;
 
   const bmp = await blobToImageBitmap(imageBlob);
   const { canvas, ctx } = canvasFromBitmap(bmp);
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = img.data;
-
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i];
-    const g = d[i + 1];
-    const b = d[i + 2];
-    const dr = r - key.r;
-    const dg = g - key.g;
-    const db = b - key.b;
-    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-
-    if (dist < tolerance) {
-      d[i + 3] = 0;
-    } else if (dist < softMax) {
-      const t = (dist - tolerance) / (softMax - tolerance);
-      d[i + 3] = Math.round(d[i + 3] * t);
-    }
-
-    // despill: 保留像素若绿色明显高于 R/B，压制 G
-    if (despill && d[i + 3] > 0) {
-      const maxRB = Math.max(r, b);
-      if (g > maxRB) {
-        d[i + 1] = maxRB;
-      }
-    }
-  }
+  applyChromaKeyToImageData(img.data, key, tolerance, despill);
 
   if (featherPx > 0) {
-    boxBlurAlpha(d, canvas.width, canvas.height, featherPx);
+    boxBlurAlpha(img.data, canvas.width, canvas.height, featherPx);
   }
 
   ctx.putImageData(img, 0, 0);

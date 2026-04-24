@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { listFramesAsDataUrls } from "@/services/character";
+import { readVideoAsBlobUrl } from "@/services/video";
 import type { CharacterAnimation } from "@/types/character";
 import type { PetState } from "@/types/pet";
+import ChromaKeyVideo from "./ChromaKeyVideo";
 
 interface Props {
   characterId: string;
@@ -11,12 +13,13 @@ interface Props {
 }
 
 /**
- * 自定义角色 PNG 静态渲染器。
+ * 自定义角色渲染器。
  *
- * 策略：**只显示单张图片**（当前 state 绑定动作的第 0 帧，否则退回 idle 的第 0 帧，再退回 base.png）。
- * 当前生图管线产出的 2-4 帧 seed 不一致，硬切帧看起来像"抽卡轮播"。
- * 改用外层容器 CSS 动画（sprite-{state}）提供呼吸/摇头/弹跳等 transform 动画，
- * 单帧 + CSS 就足够让桌宠"活起来"。
+ * 双通道：
+ *   - 动作若有 `video_path` → 播放 WebM（VP9 + alpha），靠视频自身循环驱动动画；
+ *   - 否则走"单帧 PNG + 外层 CSS 动画"兜底（sprite-{state} 提供呼吸/摇头等 transform）。
+ *
+ * 视频 Blob URL 体积大（~1-2MB），切换角色时需 revoke 释放内存。
  */
 export default function SpriteRenderer({
   characterId,
@@ -26,6 +29,9 @@ export default function SpriteRenderer({
 }: Props) {
   const [framesByAction, setFramesByAction] = useState<
     Record<string, string[]>
+  >({});
+  const [videosByAction, setVideosByAction] = useState<
+    Record<string, string>
   >({});
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -42,11 +48,13 @@ export default function SpriteRenderer({
     let cancelled = false;
     setLoaded(false);
     setFramesByAction({});
+    setVideosByAction({});
     setBaseUrl(null);
+    const createdUrls: string[] = [];
 
     (async () => {
       try {
-        const [actionResults, base] = await Promise.all([
+        const [actionResults, base, videoResults] = await Promise.all([
           Promise.all(
             animations.map(async (a) => ({
               name: a.action_name,
@@ -54,11 +62,31 @@ export default function SpriteRenderer({
             }))
           ),
           listFramesAsDataUrls(characterId, "").then((arr) => arr[0] ?? null),
+          Promise.all(
+            animations
+              .filter((a) => a.video_path)
+              .map(async (a) => {
+                try {
+                  const url = await readVideoAsBlobUrl(characterId, a.video_path!);
+                  return { name: a.action_name, url };
+                } catch {
+                  return null;
+                }
+              })
+          ),
         ]);
         if (cancelled) return;
         const map: Record<string, string[]> = {};
         for (const r of actionResults) map[r.name] = r.frames;
+        const vmap: Record<string, string> = {};
+        for (const r of videoResults) {
+          if (r) {
+            vmap[r.name] = r.url;
+            createdUrls.push(r.url);
+          }
+        }
         setFramesByAction(map);
+        setVideosByAction(vmap);
         setBaseUrl(base);
         setLoaded(true);
       } catch {
@@ -68,6 +96,7 @@ export default function SpriteRenderer({
 
     return () => {
       cancelled = true;
+      for (const u of createdUrls) URL.revokeObjectURL(u);
     };
   }, [characterId, animations]);
 
@@ -89,10 +118,14 @@ export default function SpriteRenderer({
     );
   }
 
+  const videoUrl =
+    currentAnim && videosByAction[currentAnim.action_name]
+      ? videosByAction[currentAnim.action_name]
+      : null;
   const src =
     (currentAnim && framesByAction[currentAnim.action_name]?.[0]) ?? baseUrl;
 
-  if (!src) {
+  if (!videoUrl && !src) {
     return (
       <div
         style={{
@@ -119,18 +152,33 @@ export default function SpriteRenderer({
         pointerEvents: "none",
       }}
     >
-      <img
-        src={src}
-        alt={currentAnim?.action_name ?? "character"}
-        draggable={false}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
-          userSelect: "none",
-          pointerEvents: "none",
-        }}
-      />
+      {videoUrl ? (
+        <ChromaKeyVideo
+          key={videoUrl}
+          src={videoUrl}
+          size={size}
+          loop={currentAnim?.loop_mode !== "once"}
+          keyColor={currentAnim?.chroma_key_color ?? undefined}
+          tolerance={currentAnim?.chroma_key_tolerance ?? undefined}
+          clipBlack={currentAnim?.video_provider !== "local"}
+          objectFit={
+            currentAnim?.video_provider === "local" ? "contain" : "cover"
+          }
+        />
+      ) : (
+        <img
+          src={src!}
+          alt={currentAnim?.action_name ?? "character"}
+          draggable={false}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            userSelect: "none",
+            pointerEvents: "none",
+          }}
+        />
+      )}
     </div>
   );
 }

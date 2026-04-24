@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { emit } from "@tauri-apps/api/event";
 import { getDB } from "@/services/db";
 import type { Settings } from "@/types/settings";
 
@@ -42,5 +43,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       "SELECT * FROM settings WHERE id = 1"
     );
     set({ settings: rows[0] });
+    // 跨窗口广播：PetWindow 独立 zustand 实例需要手动 reload
+    await emit("settings-changed");
   },
 }));

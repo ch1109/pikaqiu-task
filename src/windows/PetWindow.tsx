@@ -9,6 +9,7 @@ import { usePetStore } from "@/stores/usePetStore";
 import { useReminderStore } from "@/stores/useReminderStore";
 import { useTaskStore } from "@/stores/useTaskStore";
 import { useCharacterStore } from "@/stores/useCharacterStore";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 import {
   setupCustomReminders,
   clearCustomReminders,
@@ -38,8 +39,11 @@ const IDLE_ACTION_MAX_MS = 180_000;
 /** 单击延迟：给 dblclick 让路，避免双击也被当作单击触发 curious */
 const SINGLE_CLICK_DELAY_MS = 260;
 
-/** 桌宠本体尺寸 */
-const PET_SIZE = 140;
+/** 桌宠本体基准尺寸（1.0x）；运行时乘以 settings.pet_scale 得到实际像素 */
+const PET_SIZE_BASE = 140;
+/** 缩放下限/上限（与 SettingsPanel 滑块一致） */
+const PET_SCALE_MIN = 0.5;
+const PET_SCALE_MAX = 2.0;
 /** 右键菜单大致尺寸，用于边界夹紧 */
 const MENU_W = 184;
 const MENU_H = 300;
@@ -56,6 +60,16 @@ export default function PetWindow() {
   const taskSnoozeTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(
     new Map()
   );
+
+  // 桌宠缩放系数：独立 WebView → 独立 zustand 实例，通过 "settings-changed" 事件同步
+  const petScale = useSettingsStore((s) => s.settings?.pet_scale ?? 1);
+  const clampedScale = Math.min(
+    PET_SCALE_MAX,
+    Math.max(PET_SCALE_MIN, petScale)
+  );
+  const petSize = Math.round(PET_SIZE_BASE * clampedScale);
+  const petSizeRef = useRef(petSize);
+  petSizeRef.current = petSize;
 
   const {
     state,
@@ -275,8 +289,8 @@ export default function PetWindow() {
         const w = window.innerWidth;
         const h = window.innerHeight;
 
-        // 桌宠本体：中心矩形 + 4px 容差
-        const half = PET_SIZE / 2 + 4;
+        // 桌宠本体：中心矩形 + 4px 容差（尺寸随 pet_scale 动态变化）
+        const half = petSizeRef.current / 2 + 4;
         const overPet =
           Math.abs(x - w / 2) <= half && Math.abs(y - h / 2) <= half;
 
@@ -365,6 +379,17 @@ export default function PetWindow() {
     void useCharacterStore.getState().init();
   }, []);
 
+  // Settings（含 pet_scale）：首次加载 + 跨窗口事件同步
+  useEffect(() => {
+    void useSettingsStore.getState().load();
+    const unlisten = listen("settings-changed", () => {
+      void useSettingsStore.getState().load();
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   // 任务时间锚点闹钟：PetWindow 独立 zustand 实例，需主动 loadToday 取最新 tasks
   useEffect(() => {
     const snoozeTimers = taskSnoozeTimersRef.current;
@@ -424,15 +449,17 @@ export default function PetWindow() {
         overflow: "hidden",
       }}
     >
-      {/* 气泡：位于桌宠正上方，绝对定位 */}
+      {/* 气泡：底部锚定在桌宠头顶上方 40px，向上生长；max-height 兜底避免溢出窗口顶部被 OS 裁切 */}
       {bubbleText && (
         <div
           ref={bubbleWrapRef}
           style={{
             position: "absolute",
             left: "50%",
-            top: "50%",
-            transform: `translate(-50%, calc(-50% - ${PET_SIZE / 2 - 40}px - 100%))`,
+            bottom: `calc(50% + ${petSize / 2 + 40}px)`,
+            transform: "translateX(-50%)",
+            maxHeight: `calc(50% - ${petSize / 2 + 40 + 16}px)`,
+            overflowY: "auto",
             pointerEvents: hasBubbleActions ? "auto" : "none",
           }}
         >
@@ -450,14 +477,14 @@ export default function PetWindow() {
           position: "absolute",
           left: "50%",
           top: "50%",
-          width: PET_SIZE,
-          height: PET_SIZE,
+          width: petSize,
+          height: petSize,
           transform: "translate(-50%, -50%)",
           cursor: "grab",
           pointerEvents: "auto",
         }}
       >
-        <PetSprite state={state} idleAction={idleAction} size={PET_SIZE} />
+        <PetSprite state={state} idleAction={idleAction} size={petSize} />
       </div>
 
       {/* 右键菜单：独立 pointerEvents: auto 的覆盖层 */}
