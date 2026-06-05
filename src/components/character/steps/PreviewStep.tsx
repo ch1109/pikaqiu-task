@@ -8,6 +8,7 @@ import {
   generateVideoForAction,
   promoteDraftToCharacter,
 } from "@/services/characterGenerator";
+import { videoProviderMeta } from "@/services/video/providerCatalog";
 import { setActiveCharacter } from "@/services/character";
 import WizardFooter from "../WizardFooter";
 import FramePreviewPlayer from "../FramePreviewPlayer";
@@ -252,6 +253,9 @@ export default function PreviewStep() {
           actions={videoActions.map((a) => a.action_name)}
           tasks={videoTasks}
           phase={videoPhase}
+          providerLabel={
+            videoProviderMeta(settings?.video_gen_provider ?? "gemini").label
+          }
         />
       )}
 
@@ -313,10 +317,12 @@ function VideoJobsPanel({
   actions,
   tasks,
   phase,
+  providerLabel,
 }: {
   actions: string[];
   tasks: Record<string, VideoTaskStatus>;
   phase: "idle" | "running" | "done";
+  providerLabel: string;
 }) {
   return (
     <div
@@ -342,7 +348,7 @@ function VideoJobsPanel({
         }}
       >
         <Icon name="video" size="sm" />
-        动作视频生成（Gemini Veo）
+        动作视频生成（{providerLabel}）
         <span
           style={{
             fontSize: 10,

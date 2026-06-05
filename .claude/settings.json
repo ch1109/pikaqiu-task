@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/tsc-noemit.sh\"",
+            "timeout": 120,
+            "statusMessage": "tsc --noEmit 类型检查中…"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -689,4 +689,36 @@ async function runMigrations(database: Database) {
       "INSERT INTO _migrations (name) VALUES ('017_custom_provider_config')"
     );
   }
+
+  // 迁移 018：主题模式（Lyra Aurora Dual Theme）
+  // auto = 跟随系统 prefers-color-scheme；light/dark = 强制
+  const applied018 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '018_theme_setting'"
+  );
+  if (applied018.length === 0) {
+    await database.execute(
+      "ALTER TABLE settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'auto' CHECK (theme IN ('auto','light','dark'))"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('018_theme_setting')"
+    );
+  }
+
+  // 迁移 019：AI 复盘文本（桌宠陪你日终复盘）
+  // 复用 daily_reviews 承载复盘话术：ai_reflection 存生成的文本，ai_reflection_at 记生成时刻。
+  // 二者均可空——复盘按需生成，未生成则为 NULL。
+  const applied019 = await database.select<{ name: string }[]>(
+    "SELECT name FROM _migrations WHERE name = '019_ai_reflection'"
+  );
+  if (applied019.length === 0) {
+    await database.execute(
+      "ALTER TABLE daily_reviews ADD COLUMN ai_reflection TEXT"
+    );
+    await database.execute(
+      "ALTER TABLE daily_reviews ADD COLUMN ai_reflection_at TEXT"
+    );
+    await database.execute(
+      "INSERT INTO _migrations (name) VALUES ('019_ai_reflection')"
+    );
+  }
 }

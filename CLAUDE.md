@@ -28,11 +28,11 @@ npx tsc --noEmit      # 仅类型检查（无测试框架，以此为主要静�
 |---|---|---|
 | `pet` (默认) | `PetWindow` | 透明置顶桌宠，SVG / 自定义 sprite + 气泡交互 |
 | `chat` | `ChatPanel` | LLM 对话，自然语言创建/修改任务；支持技能 `/command` 和多会话 |
-| `task` | `TaskPanel` | 任务管理，4 个 Tab：日程/任务/提醒/复盘 |
+| `task` | `TaskPanel` | 任务管理，4 个 Tab：日程/任务/提醒/足迹（复盘） |
 | `settings` | `SettingsPanel` | LLM 配置、工作时段、桌宠形象（AI 创建 / 本地导入） |
 | `character-studio` | `CharacterStudio` | 桌宠形象工作室，AI 生图 + 可选 Veo 生视频的向导式流程 |
 
-`pet` 窗口在 `tauri.conf.json` 中定义（400×440、透明、置顶）。其余窗口由 Rust 端 `commands::window::create_*_window` 按需创建。
+`pet` 窗口在 `tauri.conf.json` 中定义（400×640、透明、置顶）。其余窗口由 Rust 端 `commands::window::create_*_window` 按需创建（均 `decorations:false` + `transparent:true` + 可调）。
 
 ### 跨窗口状态同步
 
@@ -51,7 +51,7 @@ npx tsc --noEmit      # 仅类型检查（无测试框架，以此为主要静�
 ### 数据层
 
 - SQLite 通过 `@tauri-apps/plugin-sql` 在前端 TS 直接操作（`src/services/db.ts`）
-- 迁移脚本内联在 `db.ts` 的 `runMigrations()` 中（当前已到 014），非独立 SQL 文件；每条迁移用 `INSERT INTO _migrations (name) VALUES (...)` 记录，幂等重跑
+- 迁移脚本内联在 `db.ts` 的 `runMigrations()` 中（当前已到 019_ai_reflection），非独立 SQL 文件；每条迁移用 `INSERT INTO _migrations (name) VALUES (...)` 记录，幂等重跑
 - 新增迁移的约定：在末尾追加 `if (!done) { ... ; INSERT INTO _migrations }` 块，不要改既有迁移
 - 核心表：
   - **任务域**：`settings`（单行）、`daily_plans`、`tasks`、`subtasks`、`task_dependencies`、`chat_messages`、`chat_sessions`、`daily_reviews`、`reminders`
@@ -84,13 +84,13 @@ npx tsc --noEmit      # 仅类型检查（无测试框架，以此为主要静�
 - `skills` 表：每条技能 = `trigger`（/命令）+ `prompt_template`；`skillParser` 识别用户输入的 `/xxx` 并替换为完整 prompt 发给 LLM
 - `preset_prompts` 表：对话快捷按钮（`PresetBar`），点击把 prompt 注入输入框
 
-### 设计系统
+### 设计系统（"高级简约" · royal blue）
 
-- Token 文件：`src/styles/tokens.css`（WildCard Airy Light 风格）
-- **命名陷阱**：`--vermilion-*` token 实际存蓝色 `#2E6FEB`（改版遗留，不要按红色理解）
-- 语义色：`--moss-*` = emerald 绿（success），`--amber-*` = 警告，`--seal-red` = danger
-- 动画：`src/styles/animations.css`，包含 `task-active-glow`（流光边框）、`task-overtime-glow`（超时琥珀）、`stagger-fade-up` 等
-- 图标：`src/components/shared/Icon.tsx` 是 lucide-react 薄包装，新增图标**必须先在 `iconMap` 中注册**，否则 TS 报错
+- **两层 token（关键）**：`src/styles/tokens.css` 是语义底座（`--brand-*` / `--surface-*` / `--ink-*` / `--success|warn|danger-*`，含 `[data-theme="dark"]` 覆盖）；`src/styles/globals.css` 顶部把**旧别名映射到新 token**（`--vermilion-*`/`--accent-primary`→`--brand-*`、`--paper-*`→`--surface-*`、`--moss-*`→success、`--amber-*`→warn、`--seal-red`→danger）。组件层大量引用旧别名，**改主题色改 `tokens.css` 的 `--brand-*` 等源头即可**，别名自动跟随。
+- **命名陷阱**：`--vermilion-*` 实际指向蓝色 `--brand-600 = #2E6FEB`（royal blue，历史命名遗留，**不是红色**）；语义色 `--moss-*`=青松绿(success)、`--amber-*`=琥珀(warn)、`--seal-red`=樱莓红(danger)。
+- **共享窗口外壳**：4 个面板窗口统一用 `WindowTitleBar`（`size="compact"|"masthead"`）承载拖拽区 + 主题切换 + 关闭；**masthead 是窗口唯一大标题**——内容区别再放第二个大标题（否则出现"双重标题"，TaskPanel 各 Tab 的内容标题已据此移除）。`TabBar` 为横向分段式（仅 TaskPanel 用）；`WindowResizeHandle` 提供自绘缩放角。
+- 动画：`src/styles/animations.css`，含 `task-active-glow`（active 卡片**静态宝蓝左强调**，非流光）、`task-overtime-glow`（超时琥珀描边）、`stagger-fade-up`、入场动画等。入场 keyframe 收尾用 `transform:none`（脱离 GPU 合成层，避免透明窗口里文字亚像素发虚）。
+- 图标：`src/components/shared/Icon.tsx` 是 lucide-react 薄包装，新增图标**必须先在 `iconMap` 中注册**，否则 TS 报错。
 
 ### 路径别名
 
@@ -112,7 +112,7 @@ npx tsc --noEmit      # 仅类型检查（无测试框架，以此为主要静�
 
 ### 密度约束
 
-TaskPanel 窗口 400×440 固定不可调。任务列表可视高度约 254px，未展开卡片 ~56px（含 gap 12）。`expanded` 默认 false，由用户主动点击展开。修改 padding/gap 时注意验证 5 张卡可一览。
+TaskPanel 窗口由 Rust 端创建为 **580×820 可调**（`commands/window.rs`），非 400×440。顶部为 `WindowTitleBar size="masthead"`（大标题「今日任务」+ 状态副标题，标题随 Tab 变化），其下是横向分段式 TabBar + 输入行，再下是任务列表滚动区。`TaskCard` `expanded` 默认 false，由用户主动点击展开。修改 padding/gap 时注意 masthead/Tab/输入行已占用顶部高度，给列表留足滚动空间。
 
 ### 设置窗口内的 fixed 弹窗陷阱
 

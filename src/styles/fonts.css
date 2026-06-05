@@ -1,5 +1,34 @@
-/* DM Sans — 几何感无衬线，正文与标题统一使用 */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+/* ===== Lyra Aurora · 字体本地化 =====
+ * 拉丁字体走 public/fonts/ 本地 woff2（variable，subset latin），避开 Google Fonts CDN 国内不稳定。
+ * 中文字体走系统：HarmonyOS Sans SC（华为生态）/ PingFang SC（macOS）/ Microsoft YaHei（Windows）。
+ */
 
-/* DM Mono — 等宽，数据与时间展示 */
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
+/* Bricolage Grotesque — display / 品牌字 / smallcaps */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/BricolageGrotesque-Variable.woff2') format('woff2-variations'),
+       url('/fonts/BricolageGrotesque-Variable.woff2') format('woff2');
+}
+
+/* DM Sans — body / 正文 */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url('/fonts/DMSans-Variable.woff2') format('woff2-variations'),
+       url('/fonts/DMSans-Variable.woff2') format('woff2');
+}
+
+/* JetBrains Mono — 数字 / 时间 / 代码 */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono-Variable.woff2') format('woff2-variations'),
+       url('/fonts/JetBrainsMono-Variable.woff2') format('woff2');
+}

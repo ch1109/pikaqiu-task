@@ -6,7 +6,7 @@
  */
 
 export const REMINDER_PHRASES: readonly string[] = [
-  "主人~ 该做「{title}」啦 (ﾉ>ω<)ﾉ",
+  "主人~ 该「{title}」啦 (ﾉ>ω<)ﾉ",
   "叮叮！「{title}」提醒时间到 ٩(◕‿◕)۶",
   "喂喂~ 别忘了「{title}」哦 (｡•̀ᴗ-)✧",
   "时间到啦！「{title}」等你呢 ૮₍ ˶ᵔ ᵕ ᵔ˶ ₎ა",

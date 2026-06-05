@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import WindowTitleBar from "@/components/shared/WindowTitleBar";
+import WindowResizeHandle from "@/components/shared/WindowResizeHandle";
 import ChatHistory from "@/components/chat/ChatHistory";
 import ChatInput from "@/components/chat/ChatInput";
 import ChatHistoryDrawer from "@/components/chat/ChatHistoryDrawer";
@@ -411,9 +412,12 @@ export default function ChatPanel() {
         position: "relative",
       }}
     >
+      <WindowResizeHandle />
       <div className="stagger-child" style={{ "--stagger-index": 0 } as React.CSSProperties}>
         <WindowTitleBar
+          size="masthead"
           title="对话"
+          subtitle={messages.length === 0 ? "开启一场新对话" : undefined}
           rightActions={
             <>
               <button

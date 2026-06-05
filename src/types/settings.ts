@@ -1,5 +1,8 @@
 export type LLMMode = "api" | "local";
 
+/** 主题模式：auto 跟随系统 prefers-color-scheme，light/dark 强制单一主题 */
+export type Theme = "auto" | "light" | "dark";
+
 /** 可选 AI 创作 Provider：6 家商业 + 2 条开源通用管道（迁移 017 起） */
 export type AIVendorId =
   | "jimeng"
@@ -72,6 +75,8 @@ export interface Settings {
   kling_secret_key: string;
   /** 迁移 017：开源 Provider 的动态字段（如 Replicate 模型 version / OpenAI 兼容端的图像尺寸） */
   custom_provider_config: string;
+  /** 迁移 018：主题模式（auto / light / dark） */
+  theme: Theme;
   created_at: string;
   updated_at: string;
 }

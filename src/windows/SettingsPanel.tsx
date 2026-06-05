@@ -1,16 +1,19 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "@/stores/useSettingsStore";
+import { useThemeStore } from "@/stores/useThemeStore";
 import WindowTitleBar from "@/components/shared/WindowTitleBar";
+import WindowResizeHandle from "@/components/shared/WindowResizeHandle";
 import { resetProvider } from "@/services/llm";
 import { resetImageProvider } from "@/services/image";
 import type {
   AIVendorId,
   ImageGenProviderName,
   LLMMode,
+  Theme,
   VideoGenProviderName,
 } from "@/types/settings";
-import Icon from "@/components/shared/Icon";
+import Icon, { type IconName } from "@/components/shared/Icon";
 import SkillManager from "@/components/skills/SkillManager";
 import CharacterGallery from "@/components/character/CharacterGallery";
 import AIProviderCard, {
@@ -296,8 +299,9 @@ export default function SettingsPanel() {
         flexDirection: "column",
       }}
     >
+      <WindowResizeHandle />
       <div className="stagger-child" style={{ "--stagger-index": 0 } as React.CSSProperties}>
-        <WindowTitleBar title="设置" />
+        <WindowTitleBar size="masthead" title="设置" />
       </div>
 
       {/* 设置内容 */}
@@ -384,6 +388,14 @@ export default function SettingsPanel() {
               />
             </>
           )}
+        </Section>
+
+        {/* 主题 —— Lyra Aurora Dual Theme */}
+        <Section
+          title="主题"
+          subtitle="跟随系统外观，或强制使用浅色 / 深色界面"
+        >
+          <ThemeSwitcher />
         </Section>
 
         {/* 桌宠外观 */}
@@ -789,5 +801,82 @@ function ModeBtn({
     >
       {label}
     </button>
+  );
+}
+
+function ThemeSwitcher() {
+  const mode = useThemeStore((s) => s.mode);
+  const resolved = useThemeStore((s) => s.resolved);
+  const setMode = useThemeStore((s) => s.setMode);
+
+  const options: { value: Theme; label: string; icon: IconName }[] = [
+    { value: "auto", label: "跟随系统", icon: "monitor" },
+    { value: "light", label: "浅色", icon: "sun" },
+    { value: "dark", label: "深色", icon: "moon" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          padding: 4,
+          background: "var(--surface-page)",
+          border: "1px solid var(--rule-line)",
+          borderRadius: "var(--radius-input)",
+        }}
+      >
+        {options.map((opt) => {
+          const active = mode === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setMode(opt.value)}
+              style={{
+                flex: 1,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                padding: "9px 10px",
+                background: active ? "var(--surface-card)" : "transparent",
+                color: active ? "var(--brand-600)" : "var(--ink-500)",
+                fontFamily: "var(--font-display)",
+                fontSize: 12,
+                fontWeight: active ? 600 : 500,
+                border: "none",
+                borderRadius: "calc(var(--radius-input) - 2px)",
+                cursor: "pointer",
+                transition: "background 160ms ease, color 160ms ease",
+                boxShadow: active
+                  ? "0 1px 2px rgba(46,111,235,0.18), inset 0 0 0 1px var(--brand-200)"
+                  : "none",
+              }}
+            >
+              <Icon
+                name={opt.icon}
+                size="sm"
+                color={active ? "var(--brand-600)" : "var(--ink-500)"}
+              />
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+      {mode === "auto" && (
+        <p
+          style={{
+            fontSize: 11,
+            color: "var(--ink-400)",
+            margin: 0,
+            letterSpacing: "0.02em",
+          }}
+        >
+          当前实际显示：{resolved === "dark" ? "深色" : "浅色"}（系统外观决定）
+        </p>
+      )}
+    </div>
   );
 }

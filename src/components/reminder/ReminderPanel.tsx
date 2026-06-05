@@ -54,22 +54,9 @@ export default function ReminderPanel() {
           }}
         >
           <div>
-            <h2
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 22,
-                fontWeight: 700,
-                letterSpacing: "-0.02em",
-                color: "var(--ink-900)",
-                margin: 0,
-                lineHeight: 1.15,
-              }}
-            >
-              提醒
-            </h2>
             <p
               style={{
-                marginTop: 4,
+                marginTop: 0,
                 marginBottom: 0,
                 fontSize: 12,
                 color: "var(--ink-500)",

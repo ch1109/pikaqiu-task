@@ -177,7 +177,7 @@ export default function TaskCard({
           : isOvertime
             ? "3px solid var(--amber-600)"
             : `3px solid ${priorityColor}`,
-        borderRadius: "var(--radius-lg)",
+        borderRadius: 16,
         overflow: detailsOpen ? "visible" : "hidden",
         opacity: isCompleted ? 0.55 : 1,
         transition: "var(--transition-normal)",

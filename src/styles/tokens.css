@@ -1,75 +1,188 @@
-/* ===== WildCard Airy Light Tokens =====
- * 参考美学：WildCard 官网 · Linear Issues · Airy Light SaaS
- * 主基调：极浅冷蓝底 #EDF3FB + 纯白卡片 + friendly blue #2E6FEB 强调
- * 设计原则：蓝 / 白 / 圆，柔和漫射阴影，无印刷感
+/* ===== Lyra Aurora · Design Tokens =====
+ * 视觉参照：站酷《天琴语音形象升级计划》（Hicy 设计）
+ * 主调：极浅冷灰白 #EDEFF3 + 电光蓝 #3CB4F0 + 樱花粉/淡紫氛围 + 深 charcoal
+ * Day 1：仅 Light 主题。Dark 主题在 Day 2 加 [data-theme="dark"] 选择器。
  */
 
 :root {
-  /* ===== 纸张层（白 + 极浅冷蓝阶梯）===== */
-  --paper-0:    #FFFFFF;      /* 卡片主体，纯白 */
-  --paper-1:    #EDF3FB;      /* 面板底色（主区极浅冷蓝） */
-  --paper-2:    #E4ECF8;      /* 窗口外层稍深 */
-  --paper-3:    #F4F8FD;      /* hover 淡蓝 */
-  --paper-edge: #C9D6EA;      /* 边界蓝灰 */
+  /* ===== Surface（4 阶冷灰白，整体提亮 1 档以增加通透感）===== */
+  --surface-page:   #F2F4F8;       /* 窗口外层（更明亮的冷灰白） */
+  --surface-panel:  #F8FAFD;       /* 面板底（接近白） */
+  --surface-card:   #FFFFFF;       /* 卡片（纯白） */
+  --surface-shade:  #EBEFF6;       /* hover 阶 */
+  --surface-edge:   #D4DCE7;       /* 边界 */
 
-  /* ===== 墨色 8 档阶梯（slate 系）===== */
-  --ink-900: #0F172A;         /* slate-900 主标题 */
-  --ink-800: #1E293B;         /* slate-800 正文 */
-  --ink-700: #334155;         /* slate-700 */
-  --ink-600: #475569;         /* slate-600 */
-  --ink-500: #64748B;         /* slate-500 次级标签 */
-  --ink-400: #94A3B8;         /* slate-400 muted */
-  --ink-300: #CBD5E1;         /* slate-300 disabled */
-  --ink-200: #E2E8F0;         /* slate-200 分隔线强 */
-  --ink-100: #EEF2F7;         /* 分隔线弱 */
-  --ink-50:  #F4F8FD;         /* 最浅墨影 */
+  /* ===== Ink（深 charcoal 8 档，不再纯黑）===== */
+  --ink-900: #1B2230;              /* 主标题（深 charcoal，带蓝灰） */
+  --ink-800: #262E3D;
+  --ink-700: #38404F;
+  --ink-600: #52596B;              /* 正文 */
+  --ink-500: #6E7588;              /* 次级标签 */
+  --ink-400: #8A92A4;              /* muted */
+  --ink-300: #B6BEC9;              /* disabled */
+  --ink-200: #D9DEE7;              /* 分隔线强 */
+  --ink-100: #E7EBF1;              /* 分隔线弱 */
+  --ink-50:  #F1F4F8;              /* 最浅墨影 */
 
-  /* ===== 主强调（friendly blue）===== */
-  --vermilion-100: rgba(46, 111, 235, 0.06);   /* hover 底 */
-  --vermilion-200: rgba(46, 111, 235, 0.12);   /* focus ring */
-  --vermilion-400: rgba(46, 111, 235, 0.30);   /* 软边框 */
-  --vermilion-600: #2E6FEB;                    /* solid friendly blue */
-  --vermilion-700: #2258C4;                    /* hover solid */
-  --seal-red:      #DC2626;                    /* 语义 danger 红（保留） */
+  /* ===== Brand 宝蓝/钴蓝（高级简约主调，回归项目原始 royal blue）===== */
+  --brand-700: #1D54CF;            /* hover 深态 */
+  --brand-600: #2E6FEB;            /* 主调 solid */
+  --brand-500: #5388F0;            /* 略浅 */
+  --brand-400: #84A8F5;            /* 软态 */
+  --brand-200: rgba(46, 111, 235, 0.22);   /* focus ring */
+  --brand-100: rgba(46, 111, 235, 0.10);   /* hover 底 */
+  --brand-50:  rgba(46, 111, 235, 0.05);   /* 最弱 */
 
-  /* ===== 辅助色（indigo 合并到蓝 / emerald success / amber warn）===== */
-  --indigo-600: #2E6FEB;                       /* 合并到主蓝 */
-  --indigo-200: rgba(46, 111, 235, 0.10);
-  --indigo-100: rgba(46, 111, 235, 0.05);
-  --moss-600:   #10B981;                       /* emerald success */
-  --moss-200:   rgba(16, 185, 129, 0.12);
-  --moss-100:   rgba(16, 185, 129, 0.05);
-  --amber-600:  #F59E0B;                       /* 标准 amber */
-  --amber-200:  rgba(245, 158, 11, 0.14);
-  --amber-100:  rgba(245, 158, 11, 0.06);
+  /* ===== Aurora 氛围色（樱花粉 + 淡紫，反 AI slop 关键）===== */
+  --blush-500: #E8B5D6;            /* 樱花粉，氛围 / 装饰渐变端点 */
+  --blush-300: rgba(232, 181, 214, 0.45);
+  --blush-100: rgba(232, 181, 214, 0.18);
+
+  --iris-500:  #C9A8E8;            /* 淡紫，氛围 / 装饰渐变端点 */
+  --iris-300:  rgba(201, 168, 232, 0.45);
+  --iris-100:  rgba(201, 168, 232, 0.18);
+
+  /* ===== 语义色（与电光蓝同源化，不用教科书 Tailwind）===== */
+  --success-600: #3FB58F;          /* 青松绿，带蓝调 */
+  --success-200: rgba(63, 181, 143, 0.18);
+  --success-100: rgba(63, 181, 143, 0.08);
+
+  --warn-600:    #E8A33C;          /* 暖琥珀 */
+  --warn-200:    rgba(232, 163, 60, 0.18);
+  --warn-100:    rgba(232, 163, 60, 0.08);
+
+  --danger-600:  #E25C5C;          /* 樱莓红，不是工业警告红 */
+  --danger-200:  rgba(226, 92, 92, 0.18);
+  --danger-100:  rgba(226, 92, 92, 0.08);
 
   /* ===== 尺线三级 ===== */
-  --rule-line-strong: rgba(15, 23, 42, 0.12);
-  --rule-line:        rgba(15, 23, 42, 0.06);
-  --rule-line-dim:    rgba(15, 23, 42, 0.03);
+  --rule-line-strong: rgba(27, 34, 48, 0.14);
+  --rule-line:        rgba(27, 34, 48, 0.08);
+  --rule-line-dim:    rgba(27, 34, 48, 0.04);
 
   /* ===== Page gutter 基线 ===== */
   --page-gutter: 22px;
 
-  /* ===== 圆角（WildCard 大圆角）===== */
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;          /* WildCard 卡片主圆角 */
-  --radius-xl: 24px;
+  /* ===== 圆角（打破"全圆"，引入直角印章）===== */
+  --radius-sm:    6px;
+  --radius-input: 8px;             /* 输入框、小按钮（Day 1：从 14 降到 8） */
+  --radius-card:  12px;            /* 卡片、面板（Day 1：从 20 降到 12） */
+  --radius-lg:    16px;            /* 大面板 */
+  --radius-pill:  999px;           /* CTA / 类目 chip */
+  --radius-stamp: 3px;             /* 「印章」标签（DDL / 状态徽章），与 pill 形成反差 */
 
-  /* ===== 阴影 —— 柔和漫射，带蓝色调高光 ===== */
+  /* ===== 阴影 —— 紧致接触阴影（边缘定义）+ 柔和环境投影（纵深），纯中性灰、无彩色辉光 =====
+   * 高级简约要中性柔影：近 1-2px 接触阴影勾轮廓，远处大模糊给抬起感，不染蓝。 */
+  --shadow-sm:
+    0 1px 1px rgba(27, 34, 48, 0.05),
+    0 1px 2px rgba(27, 34, 48, 0.04);
   --shadow-paper-low:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 2px 8px rgba(46, 111, 235, 0.04);
+    0 1px 1px rgba(27, 34, 48, 0.04),
+    0 2px 6px rgba(27, 34, 48, 0.05);
   --shadow-paper-mid:
-    0 4px 16px rgba(46, 111, 235, 0.06),
-    0 8px 32px rgba(15, 23, 42, 0.06);
+    0 1px 2px rgba(27, 34, 48, 0.05),
+    0 4px 14px rgba(27, 34, 48, 0.07);
   --shadow-paper-lift:
-    0 12px 32px rgba(46, 111, 235, 0.10),
-    0 24px 64px rgba(15, 23, 42, 0.08);
+    0 2px 4px rgba(27, 34, 48, 0.06),
+    0 12px 32px rgba(27, 34, 48, 0.10);
 
-  /* hover 抬起 —— 不再套版偏移 */
+  /* hover 抬起 —— 中性柔影 + 极细宝蓝描边（克制的"可交互"提示，不发光） */
   --overprint-shadow:
-    0 6px 24px rgba(46, 111, 235, 0.14),
-    0 2px 8px rgba(15, 23, 42, 0.06);
+    0 0 0 1px var(--brand-100),
+    0 6px 20px rgba(27, 34, 48, 0.10);
+
+  /* ===== 焦点环 ===== */
+  --focus-ring: 0 0 0 3px var(--brand-200);
+
+  /* ===== Scrim（弹窗蒙层）===== */
+  --scrim: rgba(15, 23, 42, 0.22);
 }
+
+/* =================================================================
+ * Dark 主题 —— 深空雾光基调
+ * 触发：<html data-theme="dark">（由 useThemeStore 写入）
+ * 仅覆盖 Light 中变化的 token；radius / spacing / 过渡保持不变。
+ * ================================================================= */
+[data-theme="dark"] {
+  /* ===== Surface（深空 4 阶）===== */
+  --surface-page:   #0F1219;
+  --surface-panel:  #161B25;
+  --surface-card:   #1C2230;
+  --surface-shade:  #232A38;
+  --surface-edge:   #2C3445;
+
+  /* ===== Ink（雾白系）===== */
+  --ink-900: #ECEFF5;              /* 主标题 */
+  --ink-800: #D6DCE6;
+  --ink-700: #BCC4D2;
+  --ink-600: #A4ACBB;              /* 正文 */
+  --ink-500: #898F9F;              /* 次级标签 */
+  --ink-400: #6E7689;              /* muted */
+  --ink-300: #555C6D;              /* disabled */
+  --ink-200: #3A4254;              /* 分隔线强 */
+  --ink-100: #2D3445;              /* 分隔线弱 */
+  --ink-50:  #232A38;              /* 最浅墨影 */
+
+  /* ===== Brand 宝蓝（夜里提亮）===== */
+  --brand-700: #2E6FEB;
+  --brand-600: #4C82F5;            /* 主调 solid，提亮以保对比 */
+  --brand-500: #7BA4F8;
+  --brand-400: #A3C0FA;
+  --brand-200: rgba(76, 130, 245, 0.26);
+  --brand-100: rgba(76, 130, 245, 0.12);
+  --brand-50:  rgba(76, 130, 245, 0.06);
+
+  /* ===== Aurora 氛围色（夜里更明亮）===== */
+  --blush-500: #F0C5DD;
+  --blush-300: rgba(240, 197, 221, 0.45);
+  --blush-100: rgba(240, 197, 221, 0.16);
+
+  --iris-500:  #D5B8F0;
+  --iris-300:  rgba(213, 184, 240, 0.45);
+  --iris-100:  rgba(213, 184, 240, 0.16);
+
+  /* ===== 语义色 ===== */
+  --success-600: #5DCBA5;
+  --success-200: rgba(93, 203, 165, 0.20);
+  --success-100: rgba(93, 203, 165, 0.10);
+
+  --warn-600:    #F0B454;
+  --warn-200:    rgba(240, 180, 84, 0.20);
+  --warn-100:    rgba(240, 180, 84, 0.10);
+
+  --danger-600:  #F07878;
+  --danger-200:  rgba(240, 120, 120, 0.20);
+  --danger-100:  rgba(240, 120, 120, 0.10);
+
+  /* ===== 尺线 ===== */
+  --rule-line-strong: rgba(236, 239, 245, 0.16);
+  --rule-line:        rgba(236, 239, 245, 0.08);
+  --rule-line-dim:    rgba(236, 239, 245, 0.04);
+
+  /* ===== 阴影 —— 夜里"内部高光"提亮顶边 + 紧致接触阴影 + 环境投影（与 Light 同结构）===== */
+  --shadow-sm:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-paper-low:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 3px 10px rgba(0, 0, 0, 0.32);
+  --shadow-paper-mid:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 5px rgba(0, 0, 0, 0.42),
+    0 10px 28px rgba(0, 0, 0, 0.45);
+  --shadow-paper-lift:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.50),
+    0 20px 50px rgba(0, 0, 0, 0.55);
+
+  --overprint-shadow:
+    0 0 0 1px rgba(90, 200, 245, 0.30),
+    0 8px 28px rgba(90, 200, 245, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  --focus-ring: 0 0 0 3px var(--brand-200);
+
+  --scrim: rgba(0, 0, 0, 0.55);
+}
+

@@ -1,7 +1,6 @@
 import dayjs from "dayjs";
 import type { ScheduledBlock } from "@/types/task";
 import Icon from "@/components/shared/Icon";
-import SectionMasthead from "@/components/shared/SectionMasthead";
 
 interface TaskTimelineProps {
   blocks: ScheduledBlock[];
@@ -125,11 +124,6 @@ export default function TaskTimeline({
 
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      {/* 章节刊头 */}
-      <div style={{ padding: "22px 22px 16px" }}>
-        <SectionMasthead variant="schedule" count={blocks.length || undefined} />
-      </div>
-
       <div
         style={{
           position: "relative",
@@ -240,49 +234,50 @@ export default function TaskTimeline({
         const isCompleted = block.subtask.status === "completed";
         const isActive = block.subtask.status === "active";
 
-        // 三态容器样式：待开始（蓝渐变）/ 进行中（实蓝高亮）/ 已完成（绿渐变 strikethrough）
+        // 三态容器样式（全部 token 化以跟随主题）：
+        //   待开始 = 卡片浅渐变 + 电光蓝 borderLeft
+        //   进行中 = 电光蓝实色高亮 + 白边 + 白字
+        //   已完成 = 青松绿低饱和底 + 删除线
         const stateStyle: React.CSSProperties = isCompleted
           ? {
               background:
-                "linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)",
-              border: "1px solid rgba(16, 185, 129, 0.32)",
-              borderLeft: "4px solid var(--moss-600)",
-              color: "#047857",
-              boxShadow:
-                "0 2px 6px rgba(16, 185, 129, 0.12), 0 1px 2px rgba(15, 23, 42, 0.04)",
+                "linear-gradient(135deg, var(--success-100) 0%, var(--success-200) 100%)",
+              border: "1px solid var(--success-200)",
+              borderLeft: "4px solid var(--success-600)",
+              color: "var(--success-600)",
+              boxShadow: "var(--shadow-paper-low)",
               opacity: 0.92,
             }
           : isActive
             ? {
                 background:
-                  "linear-gradient(135deg, #2E6FEB 0%, #5F91F5 100%)",
-                border: "1px solid #2258C4",
+                  "linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%)",
+                border: "1px solid var(--brand-700)",
                 borderLeft: "4px solid #FFFFFF",
                 color: "#FFFFFF",
                 boxShadow:
-                  "0 10px 28px rgba(46, 111, 235, 0.42), 0 0 0 3px rgba(46, 111, 235, 0.20)",
+                  "0 10px 28px var(--brand-200), 0 0 0 3px var(--brand-100)",
               }
             : {
                 background:
-                  "linear-gradient(135deg, #FFFFFF 0%, #F0F6FD 100%)",
-                border: "1px solid #D6E3F4",
-                borderLeft: "4px solid var(--vermilion-400)",
+                  "linear-gradient(135deg, var(--surface-card) 0%, var(--surface-page) 100%)",
+                border: "1px solid var(--rule-line)",
+                borderLeft: "4px solid var(--brand-400)",
                 color: "var(--ink-800)",
-                boxShadow:
-                  "0 2px 8px rgba(46, 111, 235, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04)",
+                boxShadow: "var(--shadow-paper-low)",
               };
 
-        // 时间 chip 配色
+        // 时间 chip 配色（同样 token 化）
         const timeChipBg = isActive
           ? "rgba(255, 255, 255, 0.22)"
           : isCompleted
-            ? "rgba(16, 185, 129, 0.18)"
-            : "rgba(46, 111, 235, 0.10)";
+            ? "var(--success-200)"
+            : "var(--brand-100)";
         const timeChipColor = isActive
           ? "#FFFFFF"
           : isCompleted
-            ? "#047857"
-            : "var(--vermilion-600)";
+            ? "var(--success-600)"
+            : "var(--brand-600)";
 
         return (
           <div
@@ -315,10 +310,10 @@ export default function TaskTimeline({
                 style={{
                   display: "inline-flex",
                   flexShrink: 0,
-                  color: "#047857",
+                  color: "var(--success-600)",
                 }}
               >
-                <Icon name="check" size={12} color="#047857" accent />
+                <Icon name="check" size={12} color="var(--success-600)" accent />
               </span>
             ) : isActive ? (
               <span

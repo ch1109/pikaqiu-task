@@ -141,8 +141,8 @@ export default function ChatInput({
           alignItems: "flex-end",
           gap: 10,
           background: "var(--paper-0)",
-          border: "1px solid var(--ink-200)",
-          borderRadius: "var(--radius-md)",
+          border: "1px solid var(--surface-edge)",
+          borderRadius: 14,
           padding: "12px 14px",
           transition: "border-color 180ms ease, box-shadow 180ms ease",
         }}

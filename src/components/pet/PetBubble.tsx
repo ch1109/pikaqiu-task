@@ -58,7 +58,7 @@ const primaryBtnBase: CSSProperties = {
 const ghostBtnBase: CSSProperties = {
   background: "var(--paper-3)",
   color: "var(--ink-700)",
-  border: "1px solid var(--rule-line-strong)",
+  border: "1px solid var(--surface-edge)",
   borderRadius: 999,
   padding: "7px 14px",
   fontSize: 12,
@@ -119,18 +119,17 @@ export default function PetBubble({ text, fading, actions }: PetBubbleProps) {
         minWidth: 180,
         padding: hasActions ? "14px 18px 14px" : "11px 18px",
         background:
-          "linear-gradient(180deg, #FFFFFF 0%, var(--paper-3) 100%)",
-        border: "1px solid var(--rule-line)",
+          "linear-gradient(180deg, var(--surface-card) 0%, var(--surface-shade) 100%)",
+        border: "1px solid var(--surface-edge)",
         borderRadius: 22,
         fontSize: 13,
         fontFamily: "var(--font-body)",
         color: "var(--ink-800)",
         textAlign: "center",
-        lineHeight: 1.65,
+        lineHeight: 1.5,
         wordBreak: "keep-all",
         overflowWrap: "normal",
-        boxShadow:
-          "0 12px 32px rgba(46, 111, 235, 0.16), 0 4px 12px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
+        boxShadow: "var(--shadow-paper-lift)",
         pointerEvents: hasActions ? "auto" : "none",
       }}
     >
@@ -200,12 +199,11 @@ export default function PetBubble({ text, fading, actions }: PetBubbleProps) {
           transform: "translateX(-50%)",
           width: 12,
           height: 6,
-          background:
-            "linear-gradient(180deg, var(--paper-3) 0%, var(--paper-3) 100%)",
+          background: "var(--surface-shade)",
           clipPath: "polygon(50% 100%, 0 0, 100% 0)",
-          borderLeft: "1px solid var(--rule-line)",
-          borderRight: "1px solid var(--rule-line)",
-          filter: "drop-shadow(0 2px 3px rgba(46, 111, 235, 0.08))",
+          borderLeft: "1px solid var(--surface-edge)",
+          borderRight: "1px solid var(--surface-edge)",
+          filter: "drop-shadow(0 2px 3px rgba(46, 111, 235, 0.10))",
         }}
       />
     </div>

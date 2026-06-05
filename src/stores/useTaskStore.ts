@@ -74,16 +74,13 @@ interface TaskStore {
   addDependency: (taskId: number, dependsOnId: number) => Promise<void>;
   getDependencies: (taskId: number) => Promise<number[]>;
 
-  loadHistory: (
-    days: number
-  ) => Promise<Array<{ date: string; completed: number }>>;
-
   /**
-   * 按本地日期（YYYY-MM-DD）拉取当日所有已完成任务明细 + 对应子任务。
-   * 不进 zustand state：复盘回看场景只读，避免污染 tasks/subtasks 的"今日"语义。
+   * 拉取近 days 天内所有已完成任务明细 + 对应子任务，按 completed_at 倒序。
+   * 复盘「完成轨迹」用：一次查询，组件内按日期分组。只读，不进 state，
+   * 避免污染 tasks/subtasks 的"今日"语义。
    */
-  loadCompletedByDate: (
-    date: string
+  loadCompletedRange: (
+    days: number
   ) => Promise<{ tasks: Task[]; subtasksByTask: Record<number, SubTask[]> }>;
 }
 
@@ -486,15 +483,15 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     return rows.map((r) => r.depends_on_id);
   },
 
-  loadCompletedByDate: async (date) => {
+  loadCompletedRange: async (days) => {
     const db = await getDB();
     const tasks = await db.select<Task[]>(
       `SELECT * FROM tasks
        WHERE status = 'completed'
          AND completed_at IS NOT NULL
-         AND DATE(completed_at) = $1
+         AND DATE(completed_at) >= DATE('now','localtime',$1)
        ORDER BY completed_at DESC`,
-      [date]
+      [`-${days - 1} days`]
     );
     if (tasks.length === 0) {
       return { tasks: [], subtasksByTask: {} };
@@ -510,28 +507,5 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       (subtasksByTask[s.task_id] ||= []).push(s);
     }
     return { tasks, subtasksByTask };
-  },
-
-  loadHistory: async (days) => {
-    const db = await getDB();
-    const rows = await db.select<{ date: string; completed: number }[]>(
-      `SELECT DATE(completed_at) AS date, COUNT(*) AS completed
-       FROM tasks
-       WHERE status = 'completed' AND completed_at IS NOT NULL
-         AND DATE(completed_at) >= DATE('now','localtime',$1)
-       GROUP BY DATE(completed_at)
-       ORDER BY date DESC`,
-      [`-${days - 1} days`]
-    );
-
-    // 补齐缺失日期为 0，保证图表连续
-    const map = new Map(rows.map((r) => [r.date, Number(r.completed)]));
-    const today = dayjs();
-    const filled: Array<{ date: string; completed: number }> = [];
-    for (let i = 0; i < days; i++) {
-      const d = today.subtract(i, "day").format("YYYY-MM-DD");
-      filled.push({ date: d, completed: map.get(d) ?? 0 });
-    }
-    return filled;
   },
 }));

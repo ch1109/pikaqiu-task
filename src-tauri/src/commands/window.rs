@@ -57,6 +57,7 @@ pub async fn create_task_window(app: AppHandle) -> Result<(), String> {
     WebviewWindowBuilder::new(&app, "task", WebviewUrl::App("index.html".into()))
         .title("CyberPet 任务")
         .inner_size(580.0, 820.0)
+        .min_inner_size(480.0, 600.0)
         .decorations(false)
         .transparent(true)
         .resizable(true)
@@ -77,10 +78,11 @@ pub async fn create_settings_window(app: AppHandle) -> Result<(), String> {
 
     WebviewWindowBuilder::new(&app, "settings", WebviewUrl::App("index.html".into()))
         .title("CyberPet 设置")
-        .inner_size(480.0, 600.0)
+        .inner_size(480.0, 680.0)
+        .min_inner_size(420.0, 540.0)
         .decorations(false)
         .transparent(true)
-        .resizable(false)
+        .resizable(true)
         .center()
         .build()
         .map_err(|e| e.to_string())?;

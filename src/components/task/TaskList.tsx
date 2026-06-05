@@ -103,59 +103,9 @@ export default function TaskList({
         overflow: "hidden",
       }}
     >
-      {/* sticky 头：单行紧凑布局 — 标题+计数 | 输入框 */}
-      <div
-        style={{
-          padding: "10px 16px",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          flexShrink: 0,
-          background: "var(--paper-1)",
-          borderBottom: "1px solid var(--rule-line)",
-          zIndex: 2,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            gap: 5,
-            flexShrink: 0,
-          }}
-        >
-          <h2
-            className="heading-display"
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: "var(--ink-900)",
-              letterSpacing: "-0.015em",
-              lineHeight: 1.2,
-              margin: 0,
-            }}
-          >
-            今日
-          </h2>
-          {tasks.length > 0 && (
-            <span
-              className="text-mono"
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: "var(--accent-primary)",
-                letterSpacing: "-0.02em",
-                lineHeight: 1,
-              }}
-            >
-              {tasks.length}
-            </span>
-          )}
-        </div>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <QuickAddInput onAdd={onQuickAdd} autoFocus={isEmpty} />
-        </div>
+      {/* 输入行 —— masthead 已承载「今日任务」标题，这里只放快速添加，直接坐在白面板上 */}
+      <div style={{ padding: "4px 20px 12px", flexShrink: 0 }}>
+        <QuickAddInput onAdd={onQuickAdd} autoFocus={isEmpty} />
       </div>
 
       {/* 滚动区 */}
@@ -220,7 +170,7 @@ export default function TaskList({
         {!isEmpty && (
           <>
             <TaskGroupSection
-              title="正在做"
+              title="正在执行"
               count={groups.active.length}
               accentColor="var(--accent-primary)"
               defaultExpanded

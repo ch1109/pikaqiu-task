@@ -54,7 +54,7 @@ export default function ProgressRing({
             filter:
               percent >= 100
                 ? "drop-shadow(0 1px 4px rgba(82, 121, 111, 0.35))"
-                : "drop-shadow(0 1px 3px rgba(230, 57, 70, 0.2))",
+                : "drop-shadow(0 1px 3px rgba(46, 111, 235, 0.2))",
           }}
         />
       </svg>

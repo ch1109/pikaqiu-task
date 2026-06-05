@@ -32,8 +32,8 @@ const VARIANT_META: Record<
       count !== undefined ? `${count} 个时间块` : "按顺序展开一天",
   },
   review: {
-    title: "复盘",
-    defaultSubtitle: () => "回看今天发生了什么",
+    title: "足迹",
+    defaultSubtitle: () => "你一步步走过的每一天",
   },
   dialogue: {
     title: "对话",

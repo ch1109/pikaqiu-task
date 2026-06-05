@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import WindowTitleBar from "@/components/shared/WindowTitleBar";
+import WindowResizeHandle from "@/components/shared/WindowResizeHandle";
 import CharacterWizard from "@/components/character/CharacterWizard";
 import { useCharacterDraftStore } from "@/stores/useCharacterDraftStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -29,7 +30,8 @@ export default function CharacterStudio() {
           "linear-gradient(180deg, var(--paper-1) 0%, var(--paper-2) 100%)",
       }}
     >
-      <WindowTitleBar title="角色工坊" />
+      <WindowResizeHandle />
+      <WindowTitleBar size="masthead" title="角色工坊" />
       <div
         style={{
           flex: 1,

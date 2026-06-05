@@ -1,12 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import dayjs from "dayjs";
 import type { Task, SubTask } from "@/types/task";
-import ProgressRing from "@/components/shared/ProgressRing";
-import SectionMasthead from "@/components/shared/SectionMasthead";
 import Icon from "@/components/shared/Icon";
 import { categoryLabels } from "@/components/task/taskMeta";
 import TaskDetailsPopover from "@/components/task/TaskDetailsPopover";
-import { generateReview, type DailyReviewData } from "@/services/review";
+import { generateReflection, getReflection } from "@/services/review";
 import { useTaskStore } from "@/stores/useTaskStore";
 
 interface DailyReviewProps {
@@ -14,94 +12,149 @@ interface DailyReviewProps {
   tasks: Task[];
 }
 
-type HistoryRow = { date: string; completed: number };
+type RangeData = {
+  tasks: Task[];
+  subtasksByTask: Record<number, SubTask[]>;
+};
+
 const HISTORY_WINDOWS = [14, 30, 90, 180] as const;
 type HistoryDays = (typeof HISTORY_WINDOWS)[number];
+const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+function todayStr() {
+  return dayjs().format("YYYY-MM-DD");
+}
+
+function formatDateLabel(date: string): string {
+  if (date === todayStr()) return "今天";
+  if (date === dayjs().subtract(1, "day").format("YYYY-MM-DD")) return "昨天";
+  const d = dayjs(date);
+  return `${d.month() + 1}月${d.date()}日 ${WEEKDAYS[d.day()]}`;
+}
 
 export default function DailyReview({ planId, tasks }: DailyReviewProps) {
-  const [review, setReview] = useState<DailyReviewData | null>(null);
-  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const loadCompletedRange = useTaskStore((s) => s.loadCompletedRange);
+
   const [historyDays, setHistoryDays] = useState<HistoryDays>(14);
-  const loadHistory = useTaskStore((s) => s.loadHistory);
-  const loadCompletedByDate = useTaskStore((s) => s.loadCompletedByDate);
-  const todaySubtasks = useTaskStore((s) => s.subtasks);
+  const [range, setRange] = useState<RangeData>({
+    tasks: [],
+    subtasksByTask: {},
+  });
 
-  // 展开的某一天历史（单日）
-  const [expandedDate, setExpandedDate] = useState<string | null>(null);
-  const [expandedData, setExpandedData] = useState<{
-    tasks: Task[];
-    subtasksByTask: Record<number, SubTask[]>;
-  } | null>(null);
-  const [expandedLoading, setExpandedLoading] = useState(false);
+  // AI 复盘状态
+  const [reflection, setReflection] = useState<string | null>(null);
+  const [reflectAt, setReflectAt] = useState<string | null>(null);
+  const [reflecting, setReflecting] = useState(false);
+  const [reflectError, setReflectError] = useState<string | null>(null);
 
-  // 详情 Popover 状态
+  // 详情 Popover
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [openSubtasks, setOpenSubtasks] = useState<SubTask[]>([]);
   const anchorMap = useRef<Map<string, HTMLElement>>(new Map());
   const openAnchorRef = useRef<HTMLElement | null>(null);
 
+  // 完成轨迹（窗口切换 / 今日任务变化 → 刷新）
   useEffect(() => {
-    if (planId && tasks.length > 0) {
-      generateReview(planId).then(setReview);
+    let alive = true;
+    loadCompletedRange(historyDays).then((r) => {
+      if (alive) setRange(r);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loadCompletedRange, historyDays, tasks]);
+
+  // 今日复盘缓存
+  useEffect(() => {
+    if (planId == null) {
+      setReflection(null);
+      setReflectAt(null);
+      return;
     }
-  }, [planId, tasks]);
+    let alive = true;
+    getReflection(planId).then((r) => {
+      if (!alive) return;
+      setReflection(r?.text ?? null);
+      setReflectAt(r?.at ?? null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [planId]);
 
-  useEffect(() => {
-    loadHistory(historyDays).then(setHistory);
-  }, [loadHistory, tasks, historyDays]);
-
-  // 历史窗口切换后重置展开态，避免展示与选中日期错位
-  useEffect(() => {
-    setExpandedDate(null);
-    setExpandedData(null);
-  }, [historyDays]);
-
-  // 展开日期变化时关闭可能挂起的历史行 Popover，避免 anchor 失效后浮层错位
+  // 展开日期变化时关闭可能挂起的 Popover，避免 anchor 失效后浮层错位
   useEffect(() => {
     setOpenTask(null);
-  }, [expandedDate]);
+  }, [historyDays]);
 
-  const stats = useMemo(() => {
-    if (!review) return null;
-    return {
-      percent:
-        review.total_tasks > 0
-          ? (review.completed_tasks / review.total_tasks) * 100
-          : 0,
-      ...review,
-    };
-  }, [review]);
-
-  // 今日完成清单：所有 completed 任务（含未点过"开始"直接完成的）
-  const todayCompleted = useMemo(() => {
-    return tasks
-      .filter((t) => t.status === "completed")
-      .slice()
-      .sort((a, b) => {
-        const ta = a.completed_at ?? "";
-        const tb = b.completed_at ?? "";
-        return ta.localeCompare(tb);
-      });
-  }, [tasks]);
-
-  const barData = useMemo(() => {
-    return tasks
-      .filter((t) => t.status === "completed" && t.actual_mins)
-      .map((t) => ({
-        name: t.name.length > 8 ? t.name.slice(0, 8) + "…" : t.name,
-        estimated: t.estimated_mins,
-        actual: t.actual_mins!,
-        overtime: t.actual_mins! > t.estimated_mins,
-      }));
-  }, [tasks]);
-
-  const hasToday = !!stats && tasks.length > 0;
-  const hasHistory = history.some((h) => h.completed > 0);
-  const isHit = !!stats && stats.percent >= 100;
-  const historyMax = useMemo(
-    () => Math.max(1, ...history.map((h) => h.completed)),
-    [history]
+  const todayCompletedCount = useMemo(
+    () => tasks.filter((t) => t.status === "completed").length,
+    [tasks]
   );
+  const hasTodayTasks = tasks.length > 0;
+
+  const datesWithOutput = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of range.tasks) {
+      if (t.completed_at) set.add(t.completed_at.slice(0, 10));
+    }
+    return set;
+  }, [range]);
+
+  const weekCount = useMemo(() => {
+    const weekAgo = dayjs().subtract(6, "day").format("YYYY-MM-DD");
+    return range.tasks.filter(
+      (t) => (t.completed_at?.slice(0, 10) ?? "") >= weekAgo
+    ).length;
+  }, [range]);
+
+  // 连续产出天数：从今天往回数；今天还没产出时从昨天起算，不打断连胜
+  const streak = useMemo(() => {
+    let n = 0;
+    let cursor = dayjs();
+    if (!datesWithOutput.has(cursor.format("YYYY-MM-DD"))) {
+      cursor = cursor.subtract(1, "day");
+    }
+    while (datesWithOutput.has(cursor.format("YYYY-MM-DD"))) {
+      n++;
+      cursor = cursor.subtract(1, "day");
+    }
+    return n;
+  }, [datesWithOutput]);
+
+  // 按日期分组（range.tasks 已按 completed_at DESC，首次出现即最新）
+  const dayGroups = useMemo(() => {
+    const groups: Array<{ date: string; tasks: Task[] }> = [];
+    const byDate = new Map<string, Task[]>();
+    for (const t of range.tasks) {
+      const d = (t.completed_at ?? "").slice(0, 10);
+      if (!d) continue;
+      let arr = byDate.get(d);
+      if (!arr) {
+        arr = [];
+        byDate.set(d, arr);
+        groups.push({ date: d, tasks: arr });
+      }
+      arr.push(t);
+    }
+    return groups;
+  }, [range]);
+
+  // 打卡墙：窗口内逐日完成数（缺勤日零填充，最早 → 今天）
+  const heatCells = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of range.tasks) {
+      const d = t.completed_at?.slice(0, 10);
+      if (d) counts.set(d, (counts.get(d) ?? 0) + 1);
+    }
+    const start = dayjs().subtract(historyDays - 1, "day");
+    const cells: Array<{ date: string; count: number }> = [];
+    for (let i = 0; i < historyDays; i++) {
+      const d = start.add(i, "day").format("YYYY-MM-DD");
+      cells.push({ date: d, count: counts.get(d) ?? 0 });
+    }
+    return cells;
+  }, [range, historyDays]);
 
   const handleOpenDetails = useCallback(
     (task: Task, subs: SubTask[], anchorKey: string) => {
@@ -114,25 +167,20 @@ export default function DailyReview({ planId, tasks }: DailyReviewProps) {
     []
   );
 
-  const handleToggleDate = useCallback(
-    async (date: string) => {
-      if (expandedDate === date) {
-        setExpandedDate(null);
-        setExpandedData(null);
-        return;
-      }
-      setExpandedDate(date);
-      setExpandedData(null);
-      setExpandedLoading(true);
-      try {
-        const data = await loadCompletedByDate(date);
-        setExpandedData(data);
-      } finally {
-        setExpandedLoading(false);
-      }
-    },
-    [expandedDate, loadCompletedByDate]
-  );
+  const handleReflect = useCallback(async () => {
+    if (planId == null || reflecting) return;
+    setReflecting(true);
+    setReflectError(null);
+    try {
+      const text = await generateReflection(planId);
+      setReflection(text);
+      setReflectAt(dayjs().format("YYYY-MM-DD HH:mm:ss"));
+    } catch (err) {
+      setReflectError(err instanceof Error ? err.message : "复盘生成失败");
+    } finally {
+      setReflecting(false);
+    }
+  }, [planId, reflecting]);
 
   return (
     <div
@@ -142,474 +190,66 @@ export default function DailyReview({ planId, tasks }: DailyReviewProps) {
         padding: "26px 28px 32px",
         display: "flex",
         flexDirection: "column",
-        gap: 26,
+        gap: 22,
       }}
     >
-      {/* 章节刊头 */}
-      <SectionMasthead
-        variant="review"
-        subtitle={
-          !hasToday
-            ? "今天还没有数据"
-            : isHit
-              ? "圆满完成了今天的全部任务"
-              : "今天走过一半,剩下的明天继续"
-        }
+      {/* AI 小结卡片 */}
+      <ReflectionCard
+        hasTasks={hasTodayTasks}
+        completedCount={todayCompletedCount}
+        reflection={reflection}
+        reflectAt={reflectAt}
+        reflecting={reflecting}
+        error={reflectError}
+        canReflect={planId != null}
+        onReflect={handleReflect}
       />
 
-      {!hasToday && (
-        <div
-          style={{
-            maxWidth: 260,
-            fontSize: 14,
-            lineHeight: 1.65,
-            color: "var(--ink-500)",
-          }}
-        >
-          完成今天的任务后,这里会出现一份完成度报告。
-        </div>
-      )}
+      {/* 打卡统计卡（始终渲染：选择器常驻，无数据时给可爱提示而非裸 0） */}
+      <StatsCard
+        days={historyDays}
+        setDays={setHistoryDays}
+        hasData={range.tasks.length > 0}
+        streak={streak}
+        weekCount={weekCount}
+        total={range.tasks.length}
+        cells={heatCells}
+      />
 
-      {stats && tasks.length > 0 && (<>
-
-      {/* 主数据 —— 大号百分比 */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          gap: 16,
-          padding: "20px 22px",
-          background: "var(--paper-0)",
-          border: "1px solid var(--rule-line)",
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "var(--shadow-paper-low)",
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            className="smallcaps"
+      {/* 完成轨迹明细（有数据才显示；区间选择器已上移到打卡卡） */}
+      {dayGroups.length > 0 && (
+        <div>
+          <span
             style={{
-              marginBottom: 6,
-              fontSize: 11,
-              color: "var(--ink-500)",
-            }}
-          >
-            完成度
-          </div>
-          <div
-            className="display-number animate-ink"
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 72,
-              fontWeight: 600,
-              color: isHit ? "var(--moss-600)" : "var(--ink-900)",
-              lineHeight: 0.95,
-              letterSpacing: "-0.03em",
-            }}
-          >
-            {Math.round(stats.percent)}
-            <span
-              style={{
-                fontSize: 28,
-                verticalAlign: "top",
-                marginLeft: 4,
-                color: "var(--vermilion-600)",
-                fontWeight: 500,
-              }}
-            >
-              %
-            </span>
-          </div>
-        </div>
-
-        {/* 右侧：小进度环 */}
-        <div style={{ flexShrink: 0 }}>
-          <ProgressRing
-            percent={stats.percent}
-            size={72}
-            strokeWidth={5}
-            color={isHit ? "var(--moss-600)" : "var(--vermilion-600)"}
-          />
-        </div>
-      </div>
-
-      {/* 统计四宫格 */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 14,
-        }}
-      >
-        <Stat label="总计" value={stats.total_tasks} />
-        <Stat
-          label="已完成"
-          value={stats.completed_tasks}
-          color="var(--moss-600)"
-        />
-        <Stat
-          label="已跳过"
-          value={stats.skipped_tasks}
-          color="var(--ink-500)"
-        />
-        <Stat
-          label="估 / 实"
-          value={`${stats.total_estimated_mins}′/${stats.total_actual_mins}′`}
-          color={
-            stats.total_actual_mins > stats.total_estimated_mins
-              ? "var(--amber-600)"
-              : "var(--ink-800)"
-          }
-          small
-        />
-      </div>
-
-      {/* 今日完成清单 */}
-      {todayCompleted.length > 0 && (
-        <CompletedListCard
-          title="今日完成"
-          count={todayCompleted.length}
-          items={todayCompleted.map((t) => ({
-            task: t,
-            subtasks: todaySubtasks[t.id] ?? [],
-          }))}
-          anchorPrefix="today"
-          anchorMap={anchorMap.current}
-          onOpen={handleOpenDetails}
-        />
-      )}
-
-      {/* 耗时对比柱状图 */}
-      {barData.length > 0 && (
-        <div
-          style={{
-            padding: "20px 22px",
-            background: "var(--paper-0)",
-            border: "1px solid var(--rule-line)",
-            borderRadius: "var(--radius-lg)",
-            boxShadow: "var(--shadow-paper-low)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              justifyContent: "space-between",
-              marginBottom: 14,
-            }}
-          >
-            <span
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--ink-900)",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              估时 vs 实耗
-            </span>
-            <span
-              style={{
-                fontSize: 11,
-                color: "var(--ink-400)",
-              }}
-            >
-              按任务
-            </span>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {barData.map((d, i) => {
-              const maxVal = Math.max(d.estimated, d.actual);
-              return (
-                <div key={i}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "baseline",
-                      justifyContent: "space-between",
-                      marginBottom: 5,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: "var(--ink-800)",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {d.name}
-                    </span>
-                    <span
-                      className="text-mono"
-                      style={{
-                        fontSize: 11,
-                        color: d.overtime
-                          ? "var(--amber-600)"
-                          : "var(--ink-500)",
-                        letterSpacing: "-0.01em",
-                      }}
-                    >
-                      {d.actual}′ / {d.estimated}′
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 4,
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: 6,
-                        width: `${(d.estimated / maxVal) * 100}%`,
-                        minWidth: 6,
-                        background: "var(--vermilion-200)",
-                        borderRadius: 999,
-                      }}
-                    />
-                    <div
-                      style={{
-                        height: 6,
-                        width: `${(d.actual / maxVal) * 100}%`,
-                        minWidth: 6,
-                        background: d.overtime
-                          ? "var(--amber-600)"
-                          : "var(--moss-600)",
-                        borderRadius: 999,
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 图例 */}
-          <div
-            style={{
-              display: "flex",
-              gap: 16,
-              justifyContent: "flex-start",
-              marginTop: 16,
-              paddingTop: 12,
-              borderTop: "1px solid var(--rule-line)",
-            }}
-          >
-            <LegendDot color="var(--vermilion-600)" label="估时" />
-            <LegendDot color="var(--moss-600)" label="实耗" />
-            <LegendDot color="var(--amber-600)" label="超时" />
-          </div>
-        </div>
-      )}
-
-      </>)}
-
-      {/* 历史完成趋势 —— 支持区间切换，点柱条展开当日清单 */}
-      {hasHistory && (
-        <div
-          style={{
-            padding: "20px 22px",
-            background: "var(--paper-0)",
-            border: "1px solid var(--rule-line)",
-            borderRadius: "var(--radius-lg)",
-            boxShadow: "var(--shadow-paper-low)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
+              display: "inline-flex",
               alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
+              gap: 7,
               marginBottom: 14,
-              flexWrap: "wrap",
+              fontFamily: "var(--font-display)",
+              fontSize: 14,
+              fontWeight: 600,
+              color: "var(--ink-900)",
+              letterSpacing: "-0.01em",
             }}
           >
-            <span
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--ink-900)",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              近 {historyDays} 天完成
-            </span>
-            <div
-              style={{
-                display: "inline-flex",
-                background: "var(--paper-1)",
-                border: "1px solid var(--rule-line)",
-                borderRadius: 999,
-                padding: 2,
-                gap: 2,
-              }}
-              role="tablist"
-              aria-label="历史区间"
-            >
-              {HISTORY_WINDOWS.map((d) => {
-                const selected = historyDays === d;
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => setHistoryDays(d)}
-                    className="text-mono"
-                    style={{
-                      padding: "4px 10px",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: "-0.01em",
-                      borderRadius: 999,
-                      border: "none",
-                      cursor: "pointer",
-                      background: selected
-                        ? "var(--vermilion-600)"
-                        : "transparent",
-                      color: selected ? "#fff" : "var(--ink-500)",
-                      transition: "var(--transition-fast)",
-                    }}
-                    title={`近 ${d} 天`}
-                  >
-                    {d}d
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {history.map((h) => {
-              const isToday = h.date === dayjsToday();
-              const pct = (h.completed / historyMax) * 100;
-              const empty = h.completed === 0;
-              const isExpanded = expandedDate === h.date;
-              const disabled = empty;
-              return (
-                <div key={h.date}>
-                  <button
-                    type="button"
-                    onClick={() => !disabled && handleToggleDate(h.date)}
-                    disabled={disabled}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "46px 1fr 36px",
-                      alignItems: "center",
-                      gap: 10,
-                      width: "100%",
-                      padding: "6px 6px",
-                      margin: "-6px -6px",
-                      border: "none",
-                      background: isExpanded
-                        ? "var(--accent-primary-softer)"
-                        : "transparent",
-                      borderRadius: "var(--radius-sm)",
-                      cursor: disabled ? "default" : "pointer",
-                      transition: "background 160ms ease",
-                      textAlign: "left",
-                    }}
-                    title={disabled ? "当日无完成记录" : "点击查看当日完成项"}
-                  >
-                    <span
-                      className="text-mono"
-                      style={{
-                        fontSize: 11,
-                        color: isToday
-                          ? "var(--vermilion-600)"
-                          : "var(--ink-500)",
-                        letterSpacing: "-0.01em",
-                        fontWeight: isToday ? 600 : 400,
-                      }}
-                    >
-                      {h.date.slice(5)}
-                    </span>
-                    <div
-                      style={{
-                        position: "relative",
-                        height: 6,
-                        background: "var(--ink-100)",
-                        borderRadius: 999,
-                        overflow: "hidden",
-                        boxShadow: isExpanded
-                          ? "0 0 0 2px var(--accent-primary)"
-                          : "none",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: empty ? 0 : `${pct}%`,
-                          minWidth: empty ? 0 : 4,
-                          height: "100%",
-                          background: isToday
-                            ? "var(--vermilion-600)"
-                            : "var(--moss-600)",
-                          borderRadius: 999,
-                          transition: "width 420ms var(--ease-out-back)",
-                        }}
-                      />
-                      {empty && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            inset: 0,
-                            borderTop: "1px dashed var(--ink-200)",
-                            top: "50%",
-                          }}
-                        />
-                      )}
-                    </div>
-                    <span
-                      className="text-mono"
-                      style={{
-                        fontSize: 11,
-                        color: empty ? "var(--ink-300)" : "var(--ink-700)",
-                        textAlign: "right",
-                        letterSpacing: "-0.01em",
-                      }}
-                    >
-                      {h.completed}
-                    </span>
-                  </button>
-
-                  {isExpanded && (
-                    <div style={{ marginTop: 10, marginBottom: 6 }}>
-                      {expandedLoading && (
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "var(--ink-400)",
-                            padding: "8px 4px",
-                          }}
-                        >
-                          正在加载 {h.date.slice(5)} 的完成项…
-                        </div>
-                      )}
-                      {!expandedLoading && expandedData && (
-                        <CompletedListCard
-                          title={`${h.date} 完成`}
-                          count={expandedData.tasks.length}
-                          items={expandedData.tasks.map((t) => ({
-                            task: t,
-                            subtasks: expandedData.subtasksByTask[t.id] ?? [],
-                          }))}
-                          anchorPrefix={`d:${h.date}`}
-                          anchorMap={anchorMap.current}
-                          onOpen={handleOpenDetails}
-                          dense
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            <Icon name="scroll-text" size="sm" color="var(--ink-700)" />
+            完成轨迹
+          </span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {dayGroups.map((g) => (
+              <CompletedListCard
+                key={g.date}
+                title={formatDateLabel(g.date)}
+                count={g.tasks.length}
+                items={g.tasks.map((t) => ({
+                  task: t,
+                  subtasks: range.subtasksByTask[t.id] ?? [],
+                }))}
+                anchorPrefix={`d:${g.date}`}
+                anchorMap={anchorMap.current}
+                onOpen={handleOpenDetails}
+              />
+            ))}
           </div>
         </div>
       )}
@@ -632,6 +272,202 @@ export default function DailyReview({ planId, tasks }: DailyReviewProps) {
   );
 }
 
+/* ── AI 复盘卡片 ───────────────────────────────────────── */
+
+const primaryBtn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 7,
+  padding: "9px 16px",
+  background: "var(--vermilion-600)",
+  color: "#fff",
+  border: "none",
+  borderRadius: "var(--radius-pill)",
+  fontSize: 13,
+  fontWeight: 600,
+  fontFamily: "var(--font-display)",
+  letterSpacing: "-0.01em",
+  cursor: "pointer",
+  boxShadow: "var(--shadow-paper-low)",
+  transition: "var(--transition-fast)",
+};
+
+const ghostBtn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  marginTop: 12,
+  padding: 0,
+  background: "transparent",
+  color: "var(--ink-500)",
+  border: "none",
+  fontSize: 11,
+  fontWeight: 500,
+  cursor: "pointer",
+};
+
+function ReflectionCard({
+  hasTasks,
+  completedCount,
+  reflection,
+  reflectAt,
+  reflecting,
+  error,
+  canReflect,
+  onReflect,
+}: {
+  hasTasks: boolean;
+  completedCount: number;
+  reflection: string | null;
+  reflectAt: string | null;
+  reflecting: boolean;
+  error: string | null;
+  canReflect: boolean;
+  onReflect: () => void;
+}) {
+  const disabledStyle: React.CSSProperties = reflecting
+    ? { opacity: 0.65, cursor: "default" }
+    : {};
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        padding: "18px 20px",
+        background: "var(--paper-0)",
+        border: "1px solid var(--rule-line)",
+        borderRadius: "var(--radius-lg)",
+        boxShadow: "var(--shadow-paper-low)",
+        overflow: "hidden",
+      }}
+    >
+      {/* 顶部流光条：蓝 → 樱花粉，标记这张卡"是活的" */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 3,
+          background:
+            "linear-gradient(90deg, var(--vermilion-600), var(--blush-500))",
+        }}
+      />
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          marginBottom: 12,
+        }}
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+          <Icon name="sparkles" size="sm" color="var(--vermilion-600)" />
+          <span className="smallcaps" style={{ fontSize: 11, color: "var(--ink-700)" }}>
+            今日小结
+          </span>
+        </span>
+        {reflection && reflectAt && (
+          <span className="text-mono" style={{ fontSize: 10, color: "var(--ink-400)" }}>
+            {dayjs(reflectAt).format("HH:mm")} 小结
+          </span>
+        )}
+      </div>
+
+      {!hasTasks ? (
+        <div
+          style={{
+            display: "flex",
+            gap: 9,
+            alignItems: "flex-start",
+            fontSize: 13,
+            lineHeight: 1.7,
+            color: "var(--ink-500)",
+          }}
+        >
+          <Icon
+            name="send-horizontal"
+            size="sm"
+            color="var(--ink-400)"
+            style={{ marginTop: 3 }}
+          />
+          <span>今天还没有安排任务。双击我打开对话,告诉我你想做点什么吧～</span>
+        </div>
+      ) : reflection ? (
+        <>
+          <p
+            className="animate-fade-in"
+            style={{
+              margin: 0,
+              fontSize: 14,
+              lineHeight: 1.75,
+              color: "var(--ink-800)",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {reflection}
+          </p>
+          <button
+            type="button"
+            onClick={onReflect}
+            disabled={reflecting}
+            style={{ ...ghostBtn, ...disabledStyle }}
+          >
+            <Icon name="refresh-cw" size="xs" color="var(--ink-500)" />
+            {reflecting ? "重新生成中…" : "重新回顾"}
+          </button>
+        </>
+      ) : (
+        <>
+          <p
+            style={{
+              margin: "0 0 14px",
+              fontSize: 13,
+              lineHeight: 1.7,
+              color: "var(--ink-500)",
+            }}
+          >
+            {completedCount > 0
+              ? `今天已经完成 ${completedCount} 项了,让我陪你回顾一下,顺便看看明天怎么安排更顺。`
+              : "今天还在进行中。要不要让我陪你看看现在的进度,定一个最容易上手的小目标?"}
+          </p>
+          <button
+            type="button"
+            onClick={onReflect}
+            disabled={!canReflect || reflecting}
+            style={{
+              ...primaryBtn,
+              ...(!canReflect || reflecting
+                ? { opacity: 0.65, cursor: "default" }
+                : {}),
+            }}
+          >
+            <Icon name="sparkles" size="sm" color="#fff" />
+            {reflecting ? "正在回顾…" : "陪我回顾今天"}
+          </button>
+        </>
+      )}
+
+      {error && (
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 12,
+            lineHeight: 1.6,
+            color: "var(--seal-red)",
+          }}
+        >
+          小结失败:{error}。请到设置确认对话模型已配置好,再试一次。
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── 完成轨迹：单日完成清单 ────────────────────────────── */
+
 function CompletedListCard({
   title,
   count,
@@ -639,7 +475,6 @@ function CompletedListCard({
   anchorPrefix,
   anchorMap,
   onOpen,
-  dense = false,
 }: {
   title: string;
   count: number;
@@ -647,29 +482,15 @@ function CompletedListCard({
   anchorPrefix: string;
   anchorMap: Map<string, HTMLElement>;
   onOpen: (task: Task, subs: SubTask[], anchorKey: string) => void;
-  dense?: boolean;
 }) {
-  if (items.length === 0) {
-    return (
-      <div
-        style={{
-          fontSize: 12,
-          color: "var(--ink-400)",
-          padding: "8px 4px",
-        }}
-      >
-        当日没有已完成任务
-      </div>
-    );
-  }
   return (
     <div
       style={{
-        padding: dense ? "14px 16px" : "20px 22px",
-        background: dense ? "var(--paper-1)" : "var(--paper-0)",
+        padding: "18px 20px",
+        background: "var(--paper-0)",
         border: "1px solid var(--rule-line)",
         borderRadius: "var(--radius-lg)",
-        boxShadow: dense ? "none" : "var(--shadow-paper-low)",
+        boxShadow: "var(--shadow-paper-low)",
       }}
     >
       <div
@@ -677,13 +498,13 @@ function CompletedListCard({
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
-          marginBottom: dense ? 10 : 14,
+          marginBottom: 12,
         }}
       >
         <span
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: dense ? 12 : 14,
+            fontSize: 13,
             fontWeight: 600,
             color: "var(--ink-900)",
             letterSpacing: "-0.01em",
@@ -691,15 +512,12 @@ function CompletedListCard({
         >
           {title}
         </span>
-        <span
-          className="text-mono"
-          style={{ fontSize: 11, color: "var(--ink-400)" }}
-        >
+        <span className="text-mono" style={{ fontSize: 11, color: "var(--ink-400)" }}>
           {count} 项
         </span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: dense ? 6 : 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {items.map(({ task, subtasks }) => {
           const cat = categoryLabels[task.category] || categoryLabels.general;
           const completedAt = task.completed_at
@@ -719,8 +537,8 @@ function CompletedListCard({
                 display: "flex",
                 alignItems: "center",
                 gap: 10,
-                padding: dense ? "8px 10px" : "10px 12px",
-                background: dense ? "var(--paper-0)" : "var(--paper-1)",
+                padding: "10px 12px",
+                background: "var(--paper-1)",
                 border: "1px solid var(--rule-line)",
                 borderRadius: "var(--radius-md)",
                 width: "100%",
@@ -734,9 +552,7 @@ function CompletedListCard({
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = "var(--rule-line)";
-                e.currentTarget.style.background = dense
-                  ? "var(--paper-0)"
-                  : "var(--paper-1)";
+                e.currentTarget.style.background = "var(--paper-1)";
               }}
               title="查看任务详情"
             >
@@ -761,8 +577,6 @@ function CompletedListCard({
                   minWidth: 0,
                   fontSize: 13,
                   color: "var(--ink-800)",
-                  textDecoration: "line-through",
-                  textDecorationColor: "var(--ink-300)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -801,27 +615,7 @@ function CompletedListCard({
               >
                 {completedAt}
               </span>
-              <span
-                className="text-mono"
-                style={{
-                  fontSize: 11,
-                  color:
-                    task.actual_mins != null
-                      ? "var(--ink-700)"
-                      : "var(--ink-300)",
-                  letterSpacing: "-0.01em",
-                  flexShrink: 0,
-                  width: 36,
-                  textAlign: "right",
-                }}
-              >
-                {task.actual_mins != null ? `${task.actual_mins}′` : "—"}
-              </span>
-              <Icon
-                name="chevron-right"
-                size="xs"
-                color="var(--ink-300)"
-              />
+              <Icon name="chevron-right" size="xs" color="var(--ink-300)" />
             </button>
           );
         })}
@@ -830,84 +624,297 @@ function CompletedListCard({
   );
 }
 
-function dayjsToday() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+/* ── 打卡统计卡：萌系数字 + 打卡墙 ─────────────────────── */
 
-function Stat({
-  label,
-  value,
-  color = "var(--ink-800)",
-  small = false,
+function StatsCard({
+  days,
+  setDays,
+  hasData,
+  streak,
+  weekCount,
+  total,
+  cells,
 }: {
-  label: string;
-  value: string | number;
-  color?: string;
-  small?: boolean;
+  days: HistoryDays;
+  setDays: (d: HistoryDays) => void;
+  hasData: boolean;
+  streak: number;
+  weekCount: number;
+  total: number;
+  cells: Array<{ date: string; count: number }>;
 }) {
   return (
     <div
       style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-        padding: "16px 18px",
+        padding: "16px 18px 18px",
         background: "var(--paper-0)",
         border: "1px solid var(--rule-line)",
-        borderRadius: "var(--radius-md)",
+        borderRadius: "var(--radius-lg)",
         boxShadow: "var(--shadow-paper-low)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          marginBottom: hasData ? 14 : 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            fontFamily: "var(--font-display)",
+            fontSize: 14,
+            fontWeight: 600,
+            color: "var(--ink-900)",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          <Icon name="footprints" size="sm" color="var(--moss-600)" />
+          打卡
+        </span>
+        <WindowSelector days={days} setDays={setDays} />
+      </div>
+
+      {hasData ? (
+        <>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <StatPill
+              icon="flame"
+              tone="var(--amber-600)"
+              bg="var(--amber-100)"
+              value={streak}
+              label="连续天"
+            />
+            <StatPill
+              icon="check"
+              tone="var(--vermilion-600)"
+              bg="var(--vermilion-100)"
+              value={weekCount}
+              label="本周完成"
+            />
+            <StatPill
+              icon="star"
+              tone="var(--moss-600)"
+              bg="var(--moss-100)"
+              value={total}
+              label={`近${days}天`}
+            />
+          </div>
+          <Heatmap cells={cells} />
+        </>
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            gap: 9,
+            alignItems: "flex-start",
+            fontSize: 13,
+            lineHeight: 1.7,
+            color: "var(--ink-500)",
+          }}
+        >
+          <Icon
+            name="footprints"
+            size="sm"
+            color="var(--ink-400)"
+            style={{ marginTop: 3 }}
+          />
+          <span>近 {days} 天还没有打卡。完成任务,点亮第一格吧～</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WindowSelector({
+  days,
+  setDays,
+}: {
+  days: HistoryDays;
+  setDays: (d: HistoryDays) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="回看区间"
+      style={{
+        display: "inline-flex",
+        background: "var(--paper-1)",
+        border: "1px solid var(--rule-line)",
+        borderRadius: 999,
+        padding: 2,
+        gap: 2,
+      }}
+    >
+      {HISTORY_WINDOWS.map((d) => {
+        const selected = days === d;
+        return (
+          <button
+            key={d}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => setDays(d)}
+            className="text-mono"
+            style={{
+              padding: "4px 10px",
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "-0.01em",
+              borderRadius: 999,
+              border: "none",
+              cursor: "pointer",
+              background: selected ? "var(--vermilion-600)" : "transparent",
+              color: selected ? "#fff" : "var(--ink-500)",
+              transition: "var(--transition-fast)",
+            }}
+            title={`近 ${d} 天`}
+          >
+            {d}d
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function StatPill({
+  icon,
+  tone,
+  bg,
+  value,
+  label,
+}: {
+  icon: "flame" | "check" | "star";
+  tone: string;
+  bg: string;
+  value: number;
+  label: string;
+}) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 0,
+        display: "flex",
+        alignItems: "center",
+        gap: 9,
+        padding: "10px 11px",
+        background: bg,
+        borderRadius: "var(--radius-md)",
       }}
     >
       <span
         style={{
-          fontSize: 11,
-          color: "var(--ink-500)",
-          fontWeight: 500,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 26,
+          height: 26,
+          borderRadius: 999,
+          background: "var(--paper-0)",
+          flexShrink: 0,
         }}
       >
-        {label}
+        <Icon name={icon} size="sm" color={tone} />
       </span>
-      <span
-        className="text-mono"
-        style={{
-          fontSize: small ? 17 : 26,
-          fontWeight: 600,
-          color,
-          letterSpacing: "-0.02em",
-          lineHeight: 1.1,
-        }}
-      >
-        {value}
+      <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <span
+          className="display-number"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 21,
+            fontWeight: 700,
+            lineHeight: 1,
+            letterSpacing: "-0.02em",
+            color: tone,
+          }}
+        >
+          {value}
+        </span>
+        <span
+          style={{
+            fontSize: 10,
+            color: "var(--ink-500)",
+            marginTop: 3,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {label}
+        </span>
       </span>
     </div>
   );
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+/** 完成数 → 绿色强度（越多越深） */
+function cellColor(count: number): string {
+  if (count <= 0) return "var(--surface-shade)";
+  if (count === 1) return "rgba(63,181,143,0.28)";
+  if (count === 2) return "rgba(63,181,143,0.5)";
+  if (count === 3) return "rgba(63,181,143,0.72)";
+  return "var(--moss-600)";
+}
+
+function Heatmap({ cells }: { cells: Array<{ date: string; count: number }> }) {
+  const today = todayStr();
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        fontSize: 11,
-        color: "var(--ink-500)",
-      }}
-    >
-      <span
+    <div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+        {cells.map((c, i) => {
+          const isToday = c.date === today;
+          const d = dayjs(c.date);
+          return (
+            <span
+              key={c.date}
+              className="hm-cell"
+              title={`${d.month() + 1}月${d.date()}日 · ${c.count} 项`}
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: 4,
+                flexShrink: 0,
+                background: cellColor(c.count),
+                boxShadow: isToday ? "0 0 0 2px var(--vermilion-600)" : "none",
+                animationDelay: `${Math.min(i, 40) * 10}ms`,
+              }}
+            />
+          );
+        })}
+      </div>
+      <div
         style={{
-          display: "inline-block",
-          width: 14,
-          height: 3,
-          background: color,
-          borderRadius: 999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: 6,
+          marginTop: 12,
+          fontSize: 10,
+          color: "var(--ink-400)",
         }}
-      />
-      {label}
-    </span>
+      >
+        <span>少</span>
+        {[0, 1, 2, 3, 4].map((n) => (
+          <span
+            key={n}
+            style={{
+              width: 11,
+              height: 11,
+              borderRadius: 3,
+              background: cellColor(n),
+            }}
+          />
+        ))}
+        <span>多</span>
+      </div>
+    </div>
   );
 }

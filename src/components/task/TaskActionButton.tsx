@@ -31,7 +31,7 @@ const primaryStyle: CSSProperties = {
   color: "#fff",
   border: "1px solid transparent",
   boxShadow:
-    "0 2px 6px rgba(230, 57, 70, 0.24), inset 0 1px 0 rgba(255,255,255,0.18)",
+    "0 2px 6px rgba(46, 111, 235, 0.24), inset 0 1px 0 rgba(255,255,255,0.18)",
 };
 
 const ghostStyle: CSSProperties = {
@@ -70,7 +70,7 @@ export default function TaskActionButton({
       ? {
           transform: "translateY(-1px)",
           boxShadow:
-            "0 4px 10px rgba(230, 57, 70, 0.32), inset 0 1px 0 rgba(255,255,255,0.24)",
+            "0 4px 10px rgba(46, 111, 235, 0.30), inset 0 1px 0 rgba(255,255,255,0.24)",
         }
       : variant === "success"
         ? {

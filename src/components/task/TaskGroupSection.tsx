@@ -53,11 +53,11 @@ export default function TaskGroupSection({
         <span
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: 600,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
+            letterSpacing: "-0.01em",
             lineHeight: 1.2,
+            color: "var(--ink-900)",
           }}
         >
           {title}
@@ -65,27 +65,19 @@ export default function TaskGroupSection({
         <span
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
-            padding: "1px 7px",
+            padding: "1px 8px",
             borderRadius: 999,
             background: "var(--ink-100)",
             color: "var(--ink-500)",
-            lineHeight: 1.4,
+            lineHeight: 1.5,
           }}
         >
           {count}
         </span>
 
-        <span
-          aria-hidden="true"
-          style={{
-            flex: 1,
-            height: 1,
-            background: "var(--rule-line)",
-            marginLeft: 4,
-          }}
-        />
+        <span aria-hidden="true" style={{ flex: 1 }} />
 
         <span
           style={{

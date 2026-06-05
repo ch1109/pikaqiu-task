@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { listen } from "@tauri-apps/api/event";
 import WindowTitleBar from "@/components/shared/WindowTitleBar";
+import WindowResizeHandle from "@/components/shared/WindowResizeHandle";
 import TabBar from "@/components/shared/TabBar";
 import TaskList from "@/components/task/TaskList";
 import TaskTimeline from "@/components/task/TaskTimeline";
@@ -18,7 +19,7 @@ const TABS = [
   { key: "timeline", label: "日程", icon: <Icon name="calendar-days" size="sm" /> },
   { key: "tasks", label: "任务", icon: <Icon name="notebook-pen" size="sm" /> },
   { key: "reminders", label: "提醒", icon: <Icon name="bell-ring" size="sm" /> },
-  { key: "review", label: "复盘", icon: <Icon name="book-open-text" size="sm" /> },
+  { key: "review", label: "足迹", icon: <Icon name="footprints" size="sm" /> },
 ];
 
 interface OvertimeAlert {
@@ -162,6 +163,32 @@ export default function TaskPanel() {
     [updateTaskFields]
   );
 
+  // masthead 副标题：今日任务状态统计（待处理 = 正在执行 + 待开始）
+  const taskStats = (() => {
+    let active = 0;
+    let pending = 0;
+    for (const t of tasks) {
+      if (t.status === "active") active++;
+      else if (t.status === "pending") pending++;
+    }
+    const todo = active + pending;
+    if (todo === 0) return "今天暂无待办任务";
+    const parts = [`${todo} 个待处理`];
+    if (active > 0) parts.push(`${active} 个正在执行`);
+    if (pending > 0) parts.push(`${pending} 个待开始`);
+    return parts.join(" · ");
+  })();
+
+  // masthead 标题/副标题随当前 Tab 变化，避免"今日任务 · N 待处理"压在提醒/复盘内容上的标签错配
+  const masthead =
+    activeTab === "tasks"
+      ? { title: "今日任务", subtitle: taskStats }
+      : activeTab === "timeline"
+        ? { title: "今日日程", subtitle: undefined }
+        : activeTab === "reminders"
+          ? { title: "提醒事项", subtitle: undefined }
+          : { title: "足迹", subtitle: undefined };
+
   return (
     <div
       className="glass-panel"
@@ -172,8 +199,9 @@ export default function TaskPanel() {
         flexDirection: "column",
       }}
     >
+      <WindowResizeHandle />
       <div className="stagger-child" style={{ "--stagger-index": 0 } as React.CSSProperties}>
-        <WindowTitleBar title="任务" />
+        <WindowTitleBar size="masthead" title={masthead.title} subtitle={masthead.subtitle} />
       </div>
 
       {/* Tab 切换 */}

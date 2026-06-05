@@ -8,9 +8,9 @@ interface QuickAddInputProps {
 }
 
 /**
- * 苹果提醒事项风格的快速添加行：
- * 左侧虚线圆圈占位，右侧单行输入框；
- * Enter 提交并清空保持聚焦，Esc 失焦。
+ * 高级简约 · 快速添加行：
+ * 圆角矩形容器，左侧 ＋ 图标，单行输入；Enter 提交并清空保持聚焦，Esc 失焦。
+ * 说明：本输入仅创建任务（不解析 /命令/技能，那是对话面板的能力），占位文案据此如实书写。
  */
 export default function QuickAddInput({ onAdd, autoFocus }: QuickAddInputProps) {
   const [value, setValue] = useState("");
@@ -43,42 +43,29 @@ export default function QuickAddInput({ onAdd, autoFocus }: QuickAddInputProps) 
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 8,
-        padding: "6px 10px",
-        background: "var(--paper-0)",
+        gap: 10,
+        padding: "9px 14px",
+        background: "var(--surface-card)",
         border: focused
-          ? "1px solid var(--vermilion-600)"
-          : "1px solid var(--ink-200)",
-        borderRadius: 999,
+          ? "1px solid var(--brand-600)"
+          : "1px solid var(--surface-edge)",
+        borderRadius: 12,
         cursor: "text",
-        transition:
-          "border-color 180ms ease, box-shadow 200ms ease",
-        boxShadow: focused
-          ? "0 0 0 3px var(--vermilion-200)"
-          : "none",
+        transition: "border-color 180ms ease, box-shadow 200ms ease",
+        boxShadow: focused ? "var(--focus-ring)" : "var(--shadow-sm)",
       }}
     >
-      {/* 圆形占位标记 */}
-      <div
+      {/* ＋ 图标 —— 聚焦时点亮为宝蓝 */}
+      <span
         style={{
-          width: 15,
-          height: 15,
-          borderRadius: 999,
-          border: focused
-            ? "1.5px solid var(--vermilion-600)"
-            : "1.5px dashed var(--ink-300)",
+          display: "inline-flex",
           flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          transition: "border-color 180ms ease",
-          color: "var(--vermilion-600)",
+          color: focused ? "var(--brand-600)" : "var(--ink-400)",
+          transition: "color 180ms ease",
         }}
       >
-        {focused && (
-          <Icon name="plus" size={10} color="var(--vermilion-600)" />
-        )}
-      </div>
+        <Icon name="plus" size={16} />
+      </span>
 
       <input
         ref={inputRef}
@@ -89,7 +76,7 @@ export default function QuickAddInput({ onAdd, autoFocus }: QuickAddInputProps) 
         onBlur={() => setFocused(false)}
         onKeyDown={handleKeyDown}
         autoFocus={autoFocus}
-        placeholder="添加任务……回车继续"
+        placeholder="添加一个任务……回车确认"
         style={{
           flex: 1,
           background: "transparent",

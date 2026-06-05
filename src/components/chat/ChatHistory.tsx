@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import ChatMessageItem from "./ChatMessage";
-import SectionMasthead from "@/components/shared/SectionMasthead";
 import type { ChatMessage } from "@/types/chat";
 
 interface ChatHistoryProps {
@@ -38,10 +37,7 @@ export default function ChatHistory({ messages, loading }: ChatHistoryProps) {
             position: "relative",
           }}
         >
-          {/* 章节刊头 */}
-          <SectionMasthead variant="dialogue" subtitle="开启一场新对话" />
-
-          {/* 大号问候 */}
+          {/* 大号问候 —— masthead 已承载"对话"标题，这里直接进入欢迎语 */}
           <div
             className="animate-ink"
             style={{
@@ -85,7 +81,7 @@ export default function ChatHistory({ messages, loading }: ChatHistoryProps) {
               padding: "14px 18px",
               background: "var(--paper-0)",
               border: "1px solid var(--rule-line)",
-              borderRadius: "var(--radius-md)",
+              borderRadius: 14,
               boxShadow: "var(--shadow-paper-low)",
               fontSize: 13,
               lineHeight: 1.65,
