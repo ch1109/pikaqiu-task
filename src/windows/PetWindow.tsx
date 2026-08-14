@@ -71,20 +71,21 @@ export default function PetWindow() {
   const petSizeRef = useRef(petSize);
   petSizeRef.current = petSize;
 
-  const {
-    state,
-    idleAction,
-    bubbleText,
-    bubbleActions,
-    showBubble,
-    showActionBubble,
-    hideBubble,
-    setState,
-    triggerIdleAction,
-  } = usePetStore();
+  // 细粒度 selector 订阅：避免整 store 订阅导致无关字段变化时整窗重渲染
+  const state = usePetStore((s) => s.state);
+  const idleAction = usePetStore((s) => s.idleAction);
+  const bubbleText = usePetStore((s) => s.bubbleText);
+  const bubbleActions = usePetStore((s) => s.bubbleActions);
+  const showBubble = usePetStore((s) => s.showBubble);
+  const showActionBubble = usePetStore((s) => s.showActionBubble);
+  const hideBubble = usePetStore((s) => s.hideBubble);
+  const setState = usePetStore((s) => s.setState);
+  const triggerIdleAction = usePetStore((s) => s.triggerIdleAction);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<{ x: number; y: number } | null>(null);
   menuRef.current = menu;
+  /** 窗口当前是否处于鼠标穿透态；由轮询与菜单开合共同维护 */
+  const ignoreCursorRef = useRef(true);
 
   const bubbleWrapRef = useRef<HTMLDivElement | null>(null);
   const ackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,6 +137,12 @@ export default function PetWindow() {
       Math.max(MENU_MARGIN, e.clientY),
       winH - MENU_H - MENU_MARGIN
     );
+    // 菜单打开期间由 WebView 全权接管鼠标：立即关穿透，
+    // 避免 60ms 轮询切换带来的 hover 粘滞与"点空白关不掉菜单"
+    if (ignoreCursorRef.current) {
+      ignoreCursorRef.current = false;
+      getCurrentWindow().setIgnoreCursorEvents(false);
+    }
     setMenu({ x: clampedX, y: clampedY });
   }, []);
 
@@ -275,16 +282,25 @@ export default function PetWindow() {
   // 鼠标穿透：窗口层面动态切换 ignoreCursorEvents；同时用 overPet 的边沿驱动撒娇 hover
   useEffect(() => {
     const win = getCurrentWindow();
-    const ignoreRef = { current: true };
     const wasOverPetRef = { current: false };
+    // 防重入：上一次 IPC 未返回时跳过本 tick，避免请求堆积
+    const inFlightRef = { current: false };
+    ignoreCursorRef.current = true;
     win.setIgnoreCursorEvents(true);
 
     const id = setInterval(async () => {
+      // 菜单打开期间窗口已整体接管鼠标（不穿透），跳过轮询与 hover 逻辑；
+      // 菜单关闭后下一 tick 会按光标位置自动纠正穿透态
+      if (menuRef.current) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       try {
         const pos = await invoke<[number, number] | null>(
           "get_pet_cursor_local_pos"
         );
         if (!pos) return;
+        // invoke 返回期间菜单可能刚被打开，避免覆盖菜单的接管状态
+        if (menuRef.current) return;
         const [x, y] = pos;
         const w = window.innerWidth;
         const h = window.innerHeight;
@@ -293,14 +309,6 @@ export default function PetWindow() {
         const half = petSizeRef.current / 2 + 4;
         const overPet =
           Math.abs(x - w / 2) <= half && Math.abs(y - h / 2) <= half;
-
-        const m = menuRef.current;
-        const overMenu =
-          !!m &&
-          x >= m.x &&
-          x <= m.x + MENU_W &&
-          y >= m.y &&
-          y <= m.y + MENU_H;
 
         // 可交互气泡（带按钮）命中区：按实际 rect 判定，否则按钮收不到鼠标
         let overBubble = false;
@@ -311,9 +319,9 @@ export default function PetWindow() {
             x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
         }
 
-        const shouldIgnore = !(overPet || overMenu || overBubble);
-        if (shouldIgnore !== ignoreRef.current) {
-          ignoreRef.current = shouldIgnore;
+        const shouldIgnore = !(overPet || overBubble);
+        if (shouldIgnore !== ignoreCursorRef.current) {
+          ignoreCursorRef.current = shouldIgnore;
           win.setIgnoreCursorEvents(shouldIgnore);
         }
 
@@ -333,6 +341,8 @@ export default function PetWindow() {
         wasOverPetRef.current = overPet;
       } catch {
         // 忽略：可能窗口尚未完全就绪
+      } finally {
+        inFlightRef.current = false;
       }
     }, 60);
 

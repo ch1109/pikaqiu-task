@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { exit } from "@tauri-apps/plugin-process";
@@ -22,6 +22,15 @@ export default function PetContextMenu({ x, y, onClose }: PetContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const petState = usePetStore((s) => s.state);
   const isFocused = petState === "focused";
+  // 收起动画：先播 panel-exit，动画结束再真正卸载
+  const [closing, setClosing] = useState(false);
+  const closingRef = useRef(false);
+
+  const requestClose = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosing(true);
+  }, []);
 
   const items: MenuItem[] = [
     {
@@ -69,11 +78,11 @@ export default function PetContextMenu({ x, y, onClose }: PetContextMenuProps) {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
+        requestClose();
       }
     };
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") requestClose();
     };
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleEsc);
@@ -81,12 +90,15 @@ export default function PetContextMenu({ x, y, onClose }: PetContextMenuProps) {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleEsc);
     };
-  }, [onClose]);
+  }, [requestClose]);
 
   return (
     <div
       ref={ref}
-      className="animate-panel-enter"
+      className={closing ? "animate-panel-exit" : "animate-panel-enter"}
+      onAnimationEnd={(e) => {
+        if (closing && e.target === e.currentTarget) onClose();
+      }}
       style={{
         position: "fixed",
         left: x,
@@ -98,9 +110,11 @@ export default function PetContextMenu({ x, y, onClose }: PetContextMenuProps) {
         padding: "8px 0",
         boxShadow: "var(--shadow-paper-lift)",
         zIndex: 9999,
+        // 收紧入场节奏：6 项小菜单不需要 240ms 的长入场
+        animationDuration: closing ? undefined : "160ms",
       }}
     >
-      {items.map((item, index) => (
+      {items.map((item) => (
         <div key={item.label}>
           {item.danger && (
             <div
@@ -112,17 +126,16 @@ export default function PetContextMenu({ x, y, onClose }: PetContextMenuProps) {
             />
           )}
           <button
-            className={`menu-item stagger-child ${item.danger ? "menu-item--danger" : ""}`}
+            className={`menu-item ${item.danger ? "menu-item--danger" : ""}`}
             onClick={() => {
               item.action();
-              onClose();
+              requestClose();
             }}
             style={{
               padding: "11px 20px",
               fontSize: 13,
               gap: 12,
-              "--stagger-index": index,
-            } as React.CSSProperties}
+            }}
           >
             <span
               style={{
